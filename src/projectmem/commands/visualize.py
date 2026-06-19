@@ -23,7 +23,8 @@ def run(
     mem_dir = require_mem_dir(root)
 
     # 1. Build the graph data
-    graph_data = build_graph_data(events)
+    project_root = mem_dir.parent
+    graph_data = build_graph_data(events, root=project_root)
 
     # 2. Read PROJECT_MAP.md for the Project Map tab
     map_path = project_map_path(root)
@@ -65,6 +66,47 @@ def run(
     typer.echo(f"Visualization generated at {viz_path}")
     if open_browser:
         webbrowser.open(viz_path.as_uri())
+
+
+def _location_path_for_graph(
+    location: str | None,
+    root: Path | None = None,
+) -> str | None:
+    """Return a project-relative path for Story Map linking, if path-like."""
+    if not location:
+        return None
+
+    raw = location.strip().strip('"').strip("'")
+    if not raw:
+        return None
+
+    if ":" in raw:
+        head, tail = raw.split(":", 1)
+        if tail.strip().split(":", 1)[0].isdigit():
+            raw = head
+
+    normalized = raw.replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    normalized = normalized.strip("/")
+
+    if not normalized:
+        return None
+
+    root_path = root or Path.cwd()
+    candidate = root_path / normalized
+    if candidate.is_file():
+        return normalized
+    if candidate.is_dir():
+        return normalized.rstrip("/") + "/"
+
+    name = Path(normalized).name
+    is_file_like = "." in name and " " not in normalized
+    has_path_separator = "/" in normalized
+    if is_file_like and has_path_separator:
+        return normalized
+
+    return None
 
 
 def build_project_map_graph(map_text: str) -> dict[str, Any]:
@@ -144,7 +186,10 @@ def build_timeline_data(events: list[Event]) -> list[dict[str, Any]]:
     return timeline
 
 
-def build_graph_data(events: list[Event]) -> dict[str, Any]:
+def build_graph_data(
+    events: list[Event],
+    root: Path | None = None,
+) -> dict[str, Any]:
     nodes = []
     links = []
 
@@ -170,11 +215,11 @@ def build_graph_data(events: list[Event]) -> dict[str, Any]:
     for event in events:
         for f in event.files:
             add_file(f)
-        if event.location and ":" in event.location:
-            f = event.location.split(":")[0]
-            add_file(f)
+        location_file = _location_path_for_graph(event.location, root=root)
+        if location_file:
+            add_file(location_file)
             if event.outcome == "failed":
-                failure_counts[f] = failure_counts.get(f, 0) + 1
+                failure_counts[location_file] = failure_counts.get(location_file, 0) + 1
 
     # Update failure counts in nodes
     for node in nodes:
@@ -206,9 +251,9 @@ def build_graph_data(events: list[Event]) -> dict[str, Any]:
             links.append({"source": event_id, "target": f, "type": "mention"})
 
         # Link event to its location file
-        if event.location and ":" in event.location:
-            f = event.location.split(":")[0]
-            links.append({"source": event_id, "target": f, "type": "at"})
+        location_file = _location_path_for_graph(event.location, root=root)
+        if location_file:
+            links.append({"source": event_id, "target": location_file, "type": "at"})
 
     # 3. Calculate ROI stats
     raw_events = [e.__dict__ for e in events]
