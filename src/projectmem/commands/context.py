@@ -422,6 +422,7 @@ def _get_git_status_files(root: Path) -> list[str]:
             capture_output=True,
             text=True,
             timeout=5,
+            stdin=subprocess.DEVNULL,
         )
         files = []
         for line in result.stdout.strip().split("\n"):

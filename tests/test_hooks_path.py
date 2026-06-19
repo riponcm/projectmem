@@ -80,12 +80,47 @@ def fake_pjm(tmp_path: Path) -> Path:
     return pjm
 
 
+def _require_launchable_bash() -> str:
+    """Return a bash executable path, or skip when this host cannot run one."""
+    bash = shutil.which("bash")
+    if not bash:
+        pytest.skip("bash is not available")
+
+    try:
+        result = subprocess.run(
+            [bash, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            stdin=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        pytest.skip(f"bash is not launchable: {exc}")
+
+    if result.returncode != 0:
+        reason = _bash_failure_reason(result)
+        pytest.skip(f"bash is not launchable: {reason[:120]}")
+
+    return bash
+
+
+def _bash_failure_reason(result: subprocess.CompletedProcess[str]) -> str:
+    """Normalize Windows bash/WSL startup errors for readable skip messages."""
+    return (
+        ((result.stderr or "") + "\n" + (result.stdout or ""))
+        .replace("\x00", "")
+        .strip()
+    )
+
+
 def test_hook_runs_under_stripped_path(tmp_path: Path, fake_pjm: Path) -> None:
     """Simulate git's non-interactive hook environment: PATH = /usr/bin only.
 
     The hook must still find pjm via the baked absolute path, NOT via
     `command -v`. This is the exact failure mode L-047 fixes.
     """
+    bash = _require_launchable_bash()
+
     # Lay out a repo with .projectmem so the hook's directory check passes.
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -103,16 +138,24 @@ def test_hook_runs_under_stripped_path(tmp_path: Path, fake_pjm: Path) -> None:
         "PATH": "/usr/bin:/bin",
         "HOME": str(tmp_path),
     }
+    # Resolve bash before stripping PATH; the stripped PATH is the condition
+    # being tested inside the hook process.
     result = subprocess.run(
-        ["bash", str(hook)],
+        [bash, str(hook)],
         cwd=repo,
         env=minimal_env,
         capture_output=True,
         text=True,
         timeout=10,
+        stdin=subprocess.DEVNULL,
     )
     log_path = fake_pjm.parent.parent / "pjm.log"
-    assert result.returncode == 0, f"hook errored: {result.stderr}"
+    if result.returncode != 0:
+        reason = _bash_failure_reason(result)
+        lowered = reason.lower()
+        if "wsl" in lowered or "bash/" in lowered:
+            pytest.skip(f"bash is not launchable for hook scripts: {reason[:120]}")
+        assert result.returncode == 0, f"hook errored: {reason}"
     assert log_path.exists(), (
         "hook did not invoke pjm — this is the L-047 regression "
         f"(stripped PATH = {minimal_env['PATH']!r}). stderr: {result.stderr!r}"

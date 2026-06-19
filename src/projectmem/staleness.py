@@ -57,6 +57,7 @@ def commits_touching_since(
             capture_output=True,
             text=True,
             timeout=5,
+            stdin=subprocess.DEVNULL,
         )
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return None

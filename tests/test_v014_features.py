@@ -39,7 +39,12 @@ def _event_ids(tmp_path) -> list[str]:
 
 def _git(tmp_path, *args):
     subprocess.run(
-        ["git", *args], cwd=tmp_path, check=True, capture_output=True, text=True
+        ["git", *args],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
     )
 
 

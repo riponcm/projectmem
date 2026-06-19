@@ -553,8 +553,10 @@ def get_git_commit(root: Path | None = None) -> str | None:
             check=True,
             capture_output=True,
             text=True,
+            timeout=5,
+            stdin=subprocess.DEVNULL,
         )
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return None
     commit = result.stdout.strip()
     return commit or None
