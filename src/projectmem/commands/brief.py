@@ -8,6 +8,7 @@ no daemon, nothing leaves the machine.
 """
 from __future__ import annotations
 
+import sys
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -31,13 +32,40 @@ _GREEN = "\033[32m"
 _RESET = "\033[0m"
 
 
+def _stdout_encoding() -> str:
+    """Return the active stdout encoding, falling back to UTF-8."""
+    return getattr(sys.stdout, "encoding", None) or "utf-8"
+
+
+def _console_safe(text: object) -> str:
+    """Return text that can be printed by the current console encoding."""
+    value = str(text)
+    encoding = _stdout_encoding()
+    try:
+        value.encode(encoding)
+        return value
+    except UnicodeEncodeError:
+        return value.encode(encoding, errors="replace").decode(encoding)
+
+
+def _safe_echo(text: object = "") -> None:
+    typer.echo(_console_safe(text))
+
+
+def _rule(width: int = 60) -> str:
+    encoding = _stdout_encoding().lower()
+    if "utf" in encoding:
+        return "─" * width
+    return "-" * width
+
+
 def run(root: Path | None = None) -> None:
     root_path = root or Path.cwd()
     events = read_events(root)
 
-    typer.echo("")
-    typer.echo(f"{_BOLD}projectmem brief — {root_path.name}{_RESET}")
-    typer.echo(f"{_DIM}{'─' * 60}{_RESET}")
+    _safe_echo("")
+    _safe_echo(f"{_BOLD}projectmem brief — {root_path.name}{_RESET}")
+    _safe_echo(f"{_DIM}{_rule(60)}{_RESET}")
 
     _section_warnings(events)
     _section_stale(events, root_path)
@@ -46,8 +74,8 @@ def run(root: Path | None = None) -> None:
     _section_gotchas(root_path)
     _section_score(events)
 
-    typer.echo(f"{_DIM}{'─' * 60}{_RESET}")
-    typer.echo("")
+    _safe_echo(f"{_DIM}{_rule(60)}{_RESET}")
+    _safe_echo("")
 
 
 def _recent(events: list[Event], days: int = RECENT_DAYS) -> list[Event]:
@@ -79,13 +107,13 @@ def _section_warnings(events: list[Event]) -> None:
     by_file: dict[str, list[Event]] = defaultdict(list)
     for e in failed:
         by_file[_file_of(e) or "(no file)"].append(e)
-    typer.echo(f"{_YELLOW}⚠ Active warnings{_RESET}")
+    _safe_echo(f"{_YELLOW}⚠ Active warnings{_RESET}")
     if not by_file:
-        typer.echo(f"   {_DIM}none — no failed attempts in {RECENT_DAYS} days{_RESET}")
+        _safe_echo(f"   {_DIM}none — no failed attempts in {RECENT_DAYS} days{_RESET}")
         return
     for file_path, items in sorted(by_file.items(), key=lambda kv: -len(kv[1]))[:4]:
         last = items[-1]
-        typer.echo(
+        _safe_echo(
             f"   {file_path} — {len(items)} failed attempt"
             f"{'s' if len(items) != 1 else ''} "
             f"{_DIM}(last: {last.summary[:60]}){_RESET}"
@@ -101,18 +129,18 @@ def _section_stale(events: list[Event], root: Path) -> None:
         stale = []
     if not stale:
         return  # silence is the right default — no flags, no noise
-    typer.echo(f"{_YELLOW}⏳ Possibly stale{_RESET}")
+    _safe_echo(f"{_YELLOW}⏳ Possibly stale{_RESET}")
     for item in stale[:MAX_STALE]:
         event = item["event"]
         if item["commits_since"] == -1:
             reason = f"{item['file']} no longer exists"
         else:
             reason = f"{item['file']} changed {item['commits_since']}x since"
-        typer.echo(
+        _safe_echo(
             f"   {event.type} [{event.id}] {event.summary[:55]} "
             f"{_DIM}— {reason}{_RESET}"
         )
-    typer.echo(
+    _safe_echo(
         f"   {_DIM}confirm, or retire: pjm decision \"...\" --supersedes <id>{_RESET}"
     )
 
@@ -122,12 +150,12 @@ def _section_open_issues(events: list[Event]) -> None:
     open_issues = [
         e for e in events if e.type == "issue" and e.issue_id not in fixed
     ]
-    typer.echo(f"{_RED}📋 Open issues{_RESET}")
+    _safe_echo(f"{_RED}📋 Open issues{_RESET}")
     if not open_issues:
-        typer.echo(f"   {_DIM}none open{_RESET}")
+        _safe_echo(f"   {_DIM}none open{_RESET}")
         return
     for issue in open_issues[-4:]:
-        typer.echo(f"   #{issue.issue_id} {issue.summary[:70]}")
+        _safe_echo(f"   #{issue.issue_id} {issue.summary[:70]}")
 
 
 def _section_decisions(events: list[Event]) -> None:
@@ -135,12 +163,12 @@ def _section_decisions(events: list[Event]) -> None:
     live = [
         e for e in events if e.type == "decision" and e.id not in retired
     ]
-    typer.echo(f"{_TEAL}🕑 Recent decisions{_RESET}")
+    _safe_echo(f"{_TEAL}🕑 Recent decisions{_RESET}")
     if not live:
-        typer.echo(f"   {_DIM}none logged yet{_RESET}")
+        _safe_echo(f"   {_DIM}none logged yet{_RESET}")
         return
     for d in live[-MAX_DECISIONS:]:
-        typer.echo(f"   {d.summary[:75]}")
+        _safe_echo(f"   {d.summary[:75]}")
 
 
 def _section_gotchas(root: Path) -> None:
@@ -153,11 +181,11 @@ def _section_gotchas(root: Path) -> None:
         gotchas = []
     if not gotchas:
         return
-    typer.echo(f"{_TEAL}💡 Stack gotchas{_RESET}")
+    _safe_echo(f"{_TEAL}💡 Stack gotchas{_RESET}")
     for g in gotchas[-MAX_GOTCHAS:]:
         lib = g.get("library", "")
         text = g.get("text") or g.get("summary") or ""
-        typer.echo(f"   {lib}: {text[:70]}")
+        _safe_echo(f"   {lib}: {text[:70]}")
 
 
 def _section_score(events: list[Event]) -> None:
@@ -187,6 +215,6 @@ def _section_score(events: list[Event]) -> None:
         trend = f" {_RED}▼ {delta} this week{_RESET}"
     else:
         trend = f" {_DIM}— unchanged this week{_RESET}"
-    typer.echo(
+    _safe_echo(
         f"{_GREEN}📈 Score{_RESET}  {current['grade']} ({current['score']}/100){trend}"
     )

@@ -275,6 +275,19 @@ def test_brief_runs_clean_on_fresh_project(tmp_path, monkeypatch):
     assert "none" in result.output  # empty sections degrade gracefully
 
 
+def test_brief_console_helpers_are_cp1252_safe(monkeypatch):
+    from projectmem.commands import brief
+
+    class Cp1252Stdout:
+        encoding = "cp1252"
+
+    monkeypatch.setattr(brief.sys, "stdout", Cp1252Stdout())
+
+    assert brief._rule() == "-" * 60
+    text = brief._console_safe("⚠ ─ projectmem brief — projectmem 📈")
+    text.encode("cp1252")
+
+
 # ── 5. Failed-approach surfacing ─────────────────────────────────────
 
 
@@ -294,6 +307,19 @@ def test_precheck_lists_failed_approaches():
     assert "What already failed here" in failed[0]["title"]
     assert "tried CSS contain:layout" in details
     assert "debounced the handler" in details
+
+
+def test_precheck_console_helpers_are_cp1252_safe(monkeypatch):
+    from projectmem.commands import precheck
+
+    class Cp1252Stdout:
+        encoding = "cp1252"
+
+    monkeypatch.setattr(precheck.sys, "stdout", Cp1252Stdout())
+
+    assert precheck._rule() == "-" * 60
+    text = precheck._console_safe("✗ ─ warning ⚠")
+    text.encode("cp1252")
 
 
 def test_precheck_named_files_cli(tmp_path, monkeypatch):

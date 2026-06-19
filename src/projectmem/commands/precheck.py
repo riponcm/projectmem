@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -50,6 +51,33 @@ SEVERITY_LEVELS = {SEVERITY_INFO: 0, SEVERITY_WARN: 1, SEVERITY_BLOCK: 2}
 SNOOZE_MARKER = "precheck.snooze"
 _DURATION_RE = re.compile(r"^(\d+)\s*([mhd])$", re.IGNORECASE)
 _DURATION_UNITS = {"m": "minutes", "h": "hours", "d": "days"}
+
+
+def _stdout_encoding() -> str:
+    """Return the active stdout encoding, falling back to UTF-8."""
+    return getattr(sys.stdout, "encoding", None) or "utf-8"
+
+
+def _console_safe(text: object) -> str:
+    """Return text that can be printed by the current console encoding."""
+    value = str(text)
+    encoding = _stdout_encoding()
+    try:
+        value.encode(encoding)
+        return value
+    except UnicodeEncodeError:
+        return value.encode(encoding, errors="replace").decode(encoding)
+
+
+def _safe_echo(text: object = "", *, err: bool = False) -> None:
+    typer.echo(_console_safe(text), err=err)
+
+
+def _rule(width: int = 60) -> str:
+    encoding = _stdout_encoding().lower()
+    if "utf" in encoding:
+        return "─" * width
+    return "-" * width
 
 
 def parse_snooze_duration(text: str) -> timedelta:
@@ -150,17 +178,17 @@ def run(
     # Snooze management actions short-circuit the check itself.
     if unsnooze:
         if clear_snooze(root):
-            typer.echo("projectmem: precheck warnings re-enabled.")
+            _safe_echo("projectmem: precheck warnings re-enabled.")
         else:
-            typer.echo("projectmem: no active snooze.")
+            _safe_echo("projectmem: no active snooze.")
         return
     if snooze:
         try:
             expiry = set_snooze(snooze, root)
         except ValueError as exc:
-            typer.echo(f"Error: {exc}", err=True)
+            _safe_echo(f"Error: {exc}", err=True)
             raise typer.Exit(1)
-        typer.echo(
+        _safe_echo(
             f"projectmem: precheck warnings snoozed until "
             f"{expiry.strftime('%H:%M UTC')} (logged to memory). "
             f"Re-enable early with `pjm precheck --unsnooze`."
@@ -171,7 +199,7 @@ def run(
     # silenced warning is never mistaken for a clean check.
     expiry = active_snooze(root)
     if expiry is not None:
-        typer.echo(
+        _safe_echo(
             f"\033[2mprojectmem: warnings snoozed ({_remaining(expiry)} left) — "
             f"`pjm precheck --unsnooze` to re-enable.\033[0m"
         )
@@ -187,7 +215,7 @@ def run(
 
     if not target_files:
         if not quiet:
-            typer.echo("projectmem: No files to check.")
+            _safe_echo("projectmem: No files to check.")
         return
 
     # Read events and build warnings
@@ -200,7 +228,7 @@ def run(
 
     if not warnings:
         if not quiet:
-            typer.echo("\033[32mprojectmem:\033[0m no warnings — looking good!")
+            _safe_echo("\033[32mprojectmem:\033[0m no warnings — looking good!")
         return
 
     # Render warnings
@@ -264,7 +292,7 @@ def _analyze_files(
             details = []
             for attempt in reversed(failed_attempts[-3:]):
                 details.append(
-                    f"✗ {attempt.summary[:90]} ({_age(attempt.timestamp)})"
+                    f"x {attempt.summary[:90]} ({_age(attempt.timestamp)})"
                 )
             if count > 3:
                 details.append(f"  ... and {count - 3} more (pjm search --failed-only)")
@@ -437,10 +465,10 @@ def _render_warnings(warnings: list[dict[str, Any]], level: str) -> None:
     if not visible:
         return
 
-    typer.echo("")
-    typer.echo(f"{bold}projectmem: Pre-Commit Check{reset}")
-    typer.echo(f"{dim}{'─' * 60}{reset}")
-    typer.echo("")
+    _safe_echo("")
+    _safe_echo(f"{bold}projectmem: Pre-Commit Check{reset}")
+    _safe_echo(f"{dim}{_rule(60)}{reset}")
+    _safe_echo("")
 
     # Group by file
     by_file: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -448,7 +476,7 @@ def _render_warnings(warnings: list[dict[str, Any]], level: str) -> None:
         by_file[w["file"]].append(w)
 
     for file_path, file_warnings in by_file.items():
-        typer.echo(f"  {bold}{file_path}{reset}")
+        _safe_echo(f"  {bold}{file_path}{reset}")
         for w in file_warnings:
             if w["severity"] == SEVERITY_BLOCK:
                 icon = f"{red}BLOCK{reset}"
@@ -456,24 +484,24 @@ def _render_warnings(warnings: list[dict[str, Any]], level: str) -> None:
                 icon = f"{yellow}WARN{reset}"
             else:
                 icon = f"{cyan}INFO{reset}"
-            typer.echo(f"    {icon}  {w['title']}")
+            _safe_echo(f"    {icon}  {w['title']}")
             for detail in w["details"]:
-                typer.echo(f"           {dim}{detail}{reset}")
-        typer.echo("")
+                _safe_echo(f"           {dim}{detail}{reset}")
+        _safe_echo("")
 
-    typer.echo(f"{dim}{'─' * 60}{reset}")
+    _safe_echo(f"{dim}{_rule(60)}{reset}")
 
     blocking = sum(1 for w in visible if w["severity"] == SEVERITY_BLOCK)
     warning = sum(1 for w in visible if w["severity"] == SEVERITY_WARN)
 
     if blocking and level == SEVERITY_BLOCK:
-        typer.echo(f"{red}Blocked: {blocking} critical warning(s).{reset}")
-        typer.echo(f"  Bypass once: git commit --no-verify")
+        _safe_echo(f"{red}Blocked: {blocking} critical warning(s).{reset}")
+        _safe_echo("  Bypass once: git commit --no-verify")
     elif warning or blocking:
-        typer.echo(
+        _safe_echo(
             f"{dim}{warning + blocking} warning(s). Review before committing.{reset}"
         )
-    typer.echo("")
+    _safe_echo("")
 
 
 def _get_staged_files(root: Path) -> list[str]:
