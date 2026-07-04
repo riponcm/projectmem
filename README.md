@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/riponcm-projectmem-badge.png)](https://mseep.ai/app/riponcm-projectmem)
+
 <!-- mcp-name: io.github.riponcm/projectmem -->
 
 <div align="center">
