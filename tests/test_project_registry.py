@@ -6,11 +6,25 @@ from pathlib import Path
 import pytest
 
 from projectmem.project_registry import (
+    DuplicateProjectError,
     ProjectRecord,
+    ProjectNotRegisteredError,
+    ProjectRegistryError,
     Registry,
     RegistryValidationError,
+    add_project_tag,
+    clear_active_project,
+    detect_project,
+    find_project,
+    find_project_by_path,
+    list_projects,
     load_registry,
+    register_project,
+    remove_project,
+    remove_project_tag,
     save_registry,
+    set_active_project,
+    set_project_brain,
 )
 
 
@@ -151,3 +165,156 @@ def test_replace_failure_preserves_previous_registry(tmp_path, monkeypatch):
 
     assert registry_file.read_bytes() == before
     assert list(tmp_path.glob(".projects.json.*.tmp")) == []
+
+
+def _initialized_repo(tmp_path: Path, name: str = "demo") -> Path:
+    repo = tmp_path / name
+    (repo / ".projectmem").mkdir(parents=True)
+    return repo
+
+
+def test_register_and_find_by_id_alias_and_path(tmp_path):
+    registry_file = tmp_path / "home" / "projects.json"
+    repo = _initialized_repo(tmp_path)
+
+    record = register_project(
+        repo,
+        alias="My-Demo",
+        brain="personal",
+        tags=(" Python ", "local first", "python"),
+        registry_file=registry_file,
+    )
+
+    assert record.id == "my-demo"
+    assert record.alias == "my-demo"
+    assert record.path == repo.resolve()
+    assert record.default_brain == "personal"
+    assert record.tags == ("local-first", "python")
+    registry = load_registry(registry_file)
+    assert find_project("MY-DEMO", registry) == record
+    assert find_project_by_path(repo, registry) == record
+
+
+def test_registration_requires_existing_directory_and_initialization(tmp_path):
+    registry_file = tmp_path / "projects.json"
+    missing = tmp_path / "missing"
+    uninitialized = tmp_path / "plain"
+    uninitialized.mkdir()
+
+    with pytest.raises(ProjectRegistryError):
+        register_project(
+            missing, allow_uninitialized=True, registry_file=registry_file
+        )
+    with pytest.raises(ProjectRegistryError):
+        register_project(uninitialized, registry_file=registry_file)
+
+    record = register_project(
+        uninitialized,
+        allow_uninitialized=True,
+        registry_file=registry_file,
+    )
+    assert record.path == uninitialized.resolve()
+
+
+def test_duplicate_registration_does_not_mutate_registry(tmp_path):
+    registry_file = tmp_path / "projects.json"
+    repo = _initialized_repo(tmp_path)
+    register_project(repo, registry_file=registry_file)
+    before = registry_file.read_bytes()
+
+    with pytest.raises(DuplicateProjectError):
+        register_project(repo, alias="other", registry_file=registry_file)
+
+    assert registry_file.read_bytes() == before
+
+
+def test_detect_project_selects_deepest_registered_ancestor(tmp_path):
+    registry_file = tmp_path / "projects.json"
+    parent = _initialized_repo(tmp_path, "parent")
+    child = parent / "child"
+    (child / ".projectmem").mkdir(parents=True)
+    target = child / "src" / "module.py"
+    target.parent.mkdir()
+    target.write_text("", encoding="utf-8")
+    parent_record = register_project(parent, registry_file=registry_file)
+    child_record = register_project(child, registry_file=registry_file)
+    registry = load_registry(registry_file)
+    other = parent / "other"
+    other.mkdir()
+
+    assert detect_project(target, registry) == child_record
+    assert detect_project(other, registry) == parent_record
+
+
+def test_active_brain_tag_and_remove_mutations_are_atomic(tmp_path):
+    registry_file = tmp_path / "projects.json"
+    repo = _initialized_repo(tmp_path)
+    original = register_project(repo, registry_file=registry_file)
+
+    active = set_active_project(original.alias.upper(), registry_file=registry_file)
+    assert active.id == original.id
+    assert load_registry(registry_file).active_project == original.id
+
+    personal = set_project_brain(
+        original.id, "personal", registry_file=registry_file
+    )
+    assert personal.created_at == original.created_at
+    assert personal.updated_at >= original.updated_at
+
+    tagged = add_project_tag(
+        original.id, " Local   First ", registry_file=registry_file
+    )
+    tagged_again = add_project_tag(
+        original.id, "local-first", registry_file=registry_file
+    )
+    assert tagged.tags == ("local-first",)
+    assert tagged_again.tags == tagged.tags
+
+    untagged = remove_project_tag(
+        original.id, "missing", registry_file=registry_file
+    )
+    assert untagged.tags == ("local-first",)
+
+    removed = remove_project(original.id, registry_file=registry_file)
+    assert removed.id == original.id
+    registry = load_registry(registry_file)
+    assert registry.projects == ()
+    assert registry.active_project is None
+
+
+def test_list_filters_use_brain_and_tag_and_semantics(tmp_path):
+    registry_file = tmp_path / "projects.json"
+    first_repo = _initialized_repo(tmp_path, "first")
+    second_repo = _initialized_repo(tmp_path, "second")
+    first = register_project(
+        first_repo,
+        brain="coding",
+        tags=("python", "local"),
+        registry_file=registry_file,
+    )
+    register_project(
+        second_repo,
+        brain="personal",
+        tags=("python",),
+        registry_file=registry_file,
+    )
+
+    assert list_projects(
+        brain="coding", tags=("python", "local"), registry_file=registry_file
+    ) == (first,)
+    assert list_projects(
+        tags=("python", "missing"), registry_file=registry_file
+    ) == ()
+
+
+def test_missing_mutation_target_does_not_write(tmp_path):
+    registry_file = tmp_path / "projects.json"
+    save_registry(Registry(1, None, ()), registry_file)
+    before = registry_file.read_bytes()
+
+    with pytest.raises(ProjectNotRegisteredError):
+        set_active_project("missing", registry_file=registry_file)
+
+    assert registry_file.read_bytes() == before
+    clear_active_project(registry_file=registry_file)
+    assert registry_file.read_bytes() == before

@@ -6,7 +6,7 @@ import re
 import tempfile
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -308,3 +308,271 @@ def save_registry(registry: Registry, path: Path | None = None) -> None:
     finally:
         if temporary is not None and temporary.exists():
             temporary.unlink()
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).strftime(
+        _TIMESTAMP_FORMAT
+    )
+
+
+def _registry_with(
+    registry: Registry,
+    *,
+    active_project: str | None | object = ...,
+    projects: tuple[ProjectRecord, ...] | None = None,
+) -> Registry:
+    active = registry.active_project if active_project is ... else active_project
+    if active is not None and not isinstance(active, str):
+        raise _validation_error("active_project must be a string or null")
+    return Registry(
+        schema_version=registry.schema_version,
+        active_project=active,
+        projects=registry.projects if projects is None else projects,
+        extras=dict(registry.extras),
+    )
+
+
+def find_project(identifier: str, registry: Registry) -> ProjectRecord | None:
+    try:
+        normalized = _normalize_identifier(identifier, "identifier")
+    except RegistryValidationError:
+        return None
+    for record in registry.projects:
+        if record.id == normalized:
+            return record
+    for record in registry.projects:
+        if record.alias == normalized:
+            return record
+    return None
+
+
+def find_project_by_path(
+    project_path: str | Path, registry: Registry
+) -> ProjectRecord | None:
+    key = _path_key(project_path)
+    return next(
+        (record for record in registry.projects if _path_key(record.path) == key),
+        None,
+    )
+
+
+def detect_project(
+    project_path: str | Path, registry: Registry
+) -> ProjectRecord | None:
+    candidate = Path(project_path).expanduser()
+    if not candidate.exists():
+        return None
+    candidate = candidate.resolve()
+    if candidate.is_file():
+        candidate = candidate.parent
+    matches = [
+        record
+        for record in registry.projects
+        if candidate == record.path or record.path in candidate.parents
+    ]
+    if not matches:
+        return None
+    return max(matches, key=lambda record: len(record.path.parts))
+
+
+def register_project(
+    project_path: str | Path,
+    *,
+    alias: str | None = None,
+    brain: BrainName = "coding",
+    tags: Iterable[str] = (),
+    allow_uninitialized: bool = False,
+    registry_file: Path | None = None,
+) -> ProjectRecord:
+    path = Path(project_path).expanduser()
+    if not path.exists() or not path.is_dir():
+        raise ProjectRegistryError(
+            f"Project path must be an existing directory: {path}"
+        )
+    path = path.resolve()
+    if not allow_uninitialized and not (path / ".projectmem").is_dir():
+        raise ProjectRegistryError(
+            f"Project is not initialized: {path}. Run pjm init from that directory."
+        )
+    if brain not in ("coding", "personal"):
+        raise RegistryValidationError("brain must be coding or personal")
+
+    identifier = _normalize_identifier(
+        alias if alias is not None else path.name,
+        "alias",
+    )
+    normalized_tags = tuple(sorted({_normalize_tag(tag) for tag in tags}))
+    registry = load_registry(registry_file)
+    if find_project_by_path(path, registry) is not None:
+        raise DuplicateProjectError(f"Project path is already registered: {path}")
+
+    for record in registry.projects:
+        if {identifier} & {record.id, record.alias}:
+            raise DuplicateProjectError(
+                f"Project ID or alias is already registered: {identifier}"
+            )
+
+    now = _utc_now()
+    record = ProjectRecord(
+        id=identifier,
+        alias=identifier,
+        path=path,
+        default_brain=brain,
+        tags=normalized_tags,
+        created_at=now,
+        updated_at=now,
+    )
+    save_registry(
+        _registry_with(registry, projects=(*registry.projects, record)),
+        registry_file,
+    )
+    return record
+
+
+def list_projects(
+    *,
+    brain: BrainName | None = None,
+    tags: Iterable[str] = (),
+    registry_file: Path | None = None,
+) -> tuple[ProjectRecord, ...]:
+    if brain not in (None, "coding", "personal"):
+        raise RegistryValidationError("brain must be coding or personal")
+    required_tags = {_normalize_tag(tag) for tag in tags}
+    registry = load_registry(registry_file)
+    return tuple(
+        record
+        for record in registry.projects
+        if (brain is None or record.default_brain == brain)
+        and required_tags.issubset(record.tags)
+    )
+
+
+def _required_project(identifier: str, registry: Registry) -> ProjectRecord:
+    record = find_project(identifier, registry)
+    if record is None:
+        raise ProjectNotRegisteredError(
+            f"Project is not registered: {identifier}. Run pjm project list."
+        )
+    return record
+
+
+def _replace_project(
+    registry: Registry, replacement: ProjectRecord
+) -> Registry:
+    projects = tuple(
+        replacement if record.id == replacement.id else record
+        for record in registry.projects
+    )
+    return _registry_with(registry, projects=projects)
+
+
+def set_active_project(
+    identifier: str, *, registry_file: Path | None = None
+) -> ProjectRecord:
+    registry = load_registry(registry_file)
+    record = _required_project(identifier, registry)
+    if registry.active_project != record.id:
+        save_registry(
+            _registry_with(registry, active_project=record.id),
+            registry_file,
+        )
+    return record
+
+
+def clear_active_project(*, registry_file: Path | None = None) -> None:
+    registry = load_registry(registry_file)
+    if registry.active_project is not None:
+        save_registry(
+            _registry_with(registry, active_project=None),
+            registry_file,
+        )
+
+
+def remove_project(
+    identifier: str, *, registry_file: Path | None = None
+) -> ProjectRecord:
+    registry = load_registry(registry_file)
+    record = _required_project(identifier, registry)
+    projects = tuple(
+        candidate for candidate in registry.projects if candidate.id != record.id
+    )
+    active = None if registry.active_project == record.id else registry.active_project
+    save_registry(
+        _registry_with(registry, active_project=active, projects=projects),
+        registry_file,
+    )
+    return record
+
+
+def set_project_brain(
+    identifier: str,
+    brain: BrainName,
+    *,
+    registry_file: Path | None = None,
+) -> ProjectRecord:
+    if brain not in ("coding", "personal"):
+        raise RegistryValidationError("brain must be coding or personal")
+    registry = load_registry(registry_file)
+    record = _required_project(identifier, registry)
+    if record.default_brain == brain:
+        return record
+    replacement = ProjectRecord(
+        id=record.id,
+        alias=record.alias,
+        path=record.path,
+        default_brain=brain,
+        tags=record.tags,
+        created_at=record.created_at,
+        updated_at=_utc_now(),
+    )
+    save_registry(_replace_project(registry, replacement), registry_file)
+    return replacement
+
+
+def add_project_tag(
+    identifier: str,
+    tag: str,
+    *,
+    registry_file: Path | None = None,
+) -> ProjectRecord:
+    normalized = _normalize_tag(tag)
+    registry = load_registry(registry_file)
+    record = _required_project(identifier, registry)
+    if normalized in record.tags:
+        return record
+    replacement = ProjectRecord(
+        id=record.id,
+        alias=record.alias,
+        path=record.path,
+        default_brain=record.default_brain,
+        tags=tuple(sorted((*record.tags, normalized))),
+        created_at=record.created_at,
+        updated_at=_utc_now(),
+    )
+    save_registry(_replace_project(registry, replacement), registry_file)
+    return replacement
+
+
+def remove_project_tag(
+    identifier: str,
+    tag: str,
+    *,
+    registry_file: Path | None = None,
+) -> ProjectRecord:
+    normalized = _normalize_tag(tag)
+    registry = load_registry(registry_file)
+    record = _required_project(identifier, registry)
+    if normalized not in record.tags:
+        return record
+    replacement = ProjectRecord(
+        id=record.id,
+        alias=record.alias,
+        path=record.path,
+        default_brain=record.default_brain,
+        tags=tuple(existing for existing in record.tags if existing != normalized),
+        created_at=record.created_at,
+        updated_at=_utc_now(),
+    )
+    save_registry(_replace_project(registry, replacement), registry_file)
+    return replacement
