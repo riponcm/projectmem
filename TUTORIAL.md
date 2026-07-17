@@ -58,6 +58,23 @@ You should see, in order:
 
 ## Step 3 — Wire up your AI client
 
+### Optional: register projects
+
+The registry is useful when you work across several initialized repositories.
+Registration is explicit in this release:
+
+~~~text
+pjm project register C:\path\to\repo --brain coding --tag python
+pjm project list
+pjm project use repo
+~~~
+
+Use pjm project detect --path PATH to find the deepest registered project
+containing a file or directory. Manage metadata with pjm project set-brain and
+pjm project tag add, remove, or list. The registry lives at
+PROJECTMEM_HOME/projects.json (default ~/.projectmem/projects.json), contains
+local absolute paths, and does not change repo-local .projectmem events.
+
 Paste the printed config block into your client's MCP config file:
 
 | Client | Config file |

@@ -20,6 +20,7 @@ from projectmem.commands import log as log_command
 from projectmem.commands import map as map_command
 from projectmem.commands import note as note_command
 from projectmem.commands import precheck as precheck_command
+from projectmem.commands import project as project_command
 from projectmem.commands import regenerate as regenerate_command
 from projectmem.commands import score as score_command
 from projectmem.commands import search as search_command
@@ -35,6 +36,7 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+app.add_typer(project_command.project_app, name="project")
 
 
 @app.callback()

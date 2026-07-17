@@ -329,6 +329,29 @@ All 14 tools your AI can call:
 | `pjm brief` | One-screen session-start briefing: warnings, stale memories, open issues, decisions, score |
 | `pjm export [--claude-md\|--cursor]` | Compile live memory into CLAUDE.md / .cursorrules for agents without MCP |
 
+### Project registry
+
+The optional project registry tracks initialized repositories, their active
+selection, brain, and explicit tags. It is stored at
+PROJECTMEM_HOME/projects.json, or ~/.projectmem/projects.json when
+PROJECTMEM_HOME is unset. The file contains local absolute filesystem paths and
+is never uploaded by projectmem.
+
+~~~text
+pjm project register C:\path\to\repo --brain coding --tag python
+pjm project list --brain coding --tag python
+pjm project detect --path C:\path\to\repo\src
+pjm project use repo
+pjm project set-brain repo personal
+pjm project tag add repo local-first
+pjm project tag list repo
+pjm project tag remove repo local-first
+pjm project remove repo
+~~~
+
+Repeated tag filters use AND semantics. Registry commands never modify a
+project's repo-local events or summary.
+
 ### Intelligence layer
 
 | Command | Purpose |
