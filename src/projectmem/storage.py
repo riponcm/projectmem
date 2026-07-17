@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -14,6 +15,7 @@ CONFIG_FILE = "config.toml"
 ISSUES_DIR = "issues"
 AI_INSTRUCTIONS_FILE = "AI_INSTRUCTIONS.md"
 PROJECT_MAP_FILE = "PROJECT_MAP.md"
+PLAN_FILE = "plan.md"
 
 
 class ProjectMemError(RuntimeError):
@@ -97,6 +99,10 @@ def project_map_path(root: Path | None = None) -> Path:
     return require_mem_dir(root) / PROJECT_MAP_FILE
 
 
+def plan_path(root: Path | None = None) -> Path:
+    return require_mem_dir(root) / PLAN_FILE
+
+
 def issues_dir(root: Path | None = None) -> Path:
     return require_mem_dir(root) / ISSUES_DIR
 
@@ -127,8 +133,72 @@ def initialize(root: Path | None = None) -> Path:
     if not project_map.exists():
         project_map.write_text(initial_project_map(root_path), encoding="utf-8")
 
+    plan = project_dir / PLAN_FILE
+    if not plan.exists():
+        plan.write_text(initial_plan(root_path), encoding="utf-8")
+
     ensure_gitignore_entry(root_path)
+    register_project(root_path)
     return project_dir
+
+
+def registry_path() -> Path:
+    """The opt-in cross-project registry used by `pjm dashboard`.
+
+    A plain JSON list of absolute project paths. Populated only by `pjm init`
+    (never by a filesystem crawl), so the global dashboard shows ONLY projects
+    you explicitly initialised. No data is copied here — just paths; the
+    dashboard reads each project's own `.projectmem/` at render time.
+
+    Location honours $PROJECTMEM_HOME (defaults to ~/.projectmem) so tests and
+    sandboxes can isolate it instead of writing to the real user registry.
+    """
+    home = os.environ.get("PROJECTMEM_HOME")
+    base = Path(home) if home else (Path.home() / ".projectmem")
+    return base / "projects.json"
+
+
+def register_project(root: Path) -> None:
+    """Add a project's absolute path to the global registry (idempotent)."""
+    try:
+        target = str(root.resolve())
+    except OSError:
+        return
+    reg = registry_path()
+    reg.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        data = json.loads(reg.read_text(encoding="utf-8")) if reg.exists() else []
+    except (json.JSONDecodeError, OSError):
+        data = []
+    paths = [p for p in data if isinstance(p, str)]
+    if target not in paths:
+        paths.append(target)
+        reg.write_text(json.dumps(paths, indent=1) + "\n", encoding="utf-8")
+
+
+def registered_projects() -> list[Path]:
+    """Registered projects that still exist and still have a `.projectmem/`.
+
+    Stale entries (deleted repos, removed memory) are skipped, not pruned —
+    the registry stays append-only; the reader just filters.
+    """
+    reg = registry_path()
+    if not reg.exists():
+        return []
+    try:
+        data = json.loads(reg.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+    out: list[Path] = []
+    seen: set[str] = set()
+    for entry in data:
+        if not isinstance(entry, str) or entry in seen:
+            continue
+        seen.add(entry)
+        path = Path(entry)
+        if (path / MEM_DIR).is_dir():
+            out.append(path)
+    return out
 
 
 def initial_summary(root: Path) -> str:
@@ -182,8 +252,9 @@ def ai_instructions() -> str:
         "  - `summary.md` contains the phrase *\"Replace this placeholder with a "
         "concise description...\"*\n"
         "  - Section bodies say *\"None logged yet.\"*\n"
-        "  - `PROJECT_MAP.md` contains *\"Status: not created yet\"* or *\"This file "
-        "should be created by the first AI assistant...\"*\n\n"
+        "  - `PROJECT_MAP.md` contains *\"Status: not created yet\"* and its "
+        "`## Structure` / `## Relationships` sections are still empty (or say "
+        "*\"Not described yet.\"*).\n\n"
         "  → **You MUST populate both files with real project content before doing "
         "any other work for the user.** This is not optional and not deferred — your "
         "first response in a Setup Mode session is the memory-population pass. "
@@ -200,13 +271,31 @@ def ai_instructions() -> str:
         "auto-regenerates `summary.md`. **NEVER edit `summary.md` directly** — it is "
         "derived; your edits will be overwritten on the next event.\n"
         "  5. **DO edit `PROJECT_MAP.md` directly** to replace its placeholder. "
-        "`PROJECT_MAP.md` is structural and is NOT derived from events. Write the "
-        "project's purpose, main folders, entry points, important files, "
-        "relationships, and suggested first reads. Make sure PROJECT_MAP.md has a "
-        "`## Project purpose` section with a real description — that section is "
-        "auto-copied into `summary.md`'s Project purpose on the next regeneration "
-        "(the only path by which summary.md's Project purpose gets populated; "
-        "there is intentionally no MCP tool for it).\n"
+        "`PROJECT_MAP.md` is structural and is NOT derived from events. Author these "
+        "core sections (if `pjm init` already pre-added `## Stack` or `## Entry "
+        "points` from manifest detection, keep them):\n"
+        "     - `## Project purpose` — one or two sentences on what the project does. "
+        "REQUIRED: this section is auto-copied into `summary.md`'s Project purpose on "
+        "the next regeneration (the only path by which it gets populated; there is "
+        "intentionally no MCP tool for it).\n"
+        "     - `## Structure` — the project's real folders and key files **as "
+        "paths**, nested, each with a one-line description. `pjm init` already "
+        "pre-seeds the top-level folders (e.g. `core/`, `features/`); your job is to "
+        "list the key files under each with their real paths and describe them, "
+        "like:\n\n"
+        "       ```\n"
+        "       ## Structure\n"
+        "       - `core/` — engine\n"
+        "         - `core/run.py` — entry point / runner\n"
+        "         - `core/parser.py` — input parsing\n"
+        "       ```\n\n"
+        "       Treat `## Structure` as a **navigable path index**: a later session "
+        "must be able to locate any important file from this section alone, WITHOUT "
+        "re-scanning the repo. That path index is exactly what saves tokens — it "
+        "replaces re-reading the codebase every session.\n"
+        "     - `## Relationships` — how the main pieces connect, one bullet each, "
+        "using real paths and a verb: `core/run.py calls core/parser.py`, "
+        "`ui/Chart.tsx reads store/events.py`, `api/auth.py writes store/events.py`.\n"
         "  6. After step 5, summary.md and PROJECT_MAP.md both contain real content "
         "(summary.md picks up the Project purpose from PROJECT_MAP.md on the next "
         "`add_decision` / `add_note` call's auto-regen — or you can force it now "
@@ -217,8 +306,8 @@ def ai_instructions() -> str:
         "you are in Maintenance Mode:\n"
         "  - `summary.md` describes the actual project, lists real issues / "
         "decisions / notes by content.\n"
-        "  - `PROJECT_MAP.md` has real folder descriptions, entry points, and file "
-        "relationships — not *\"Status: not created yet.\"*\n\n"
+        "  - `PROJECT_MAP.md` has a real `## Structure` (folders and files with "
+        "paths) and `## Relationships` — not *\"Status: not created yet.\"*\n\n"
         "  → **STOP analyzing the project structure.** The memory is already built. "
         "Use the existing summary + map. Focus exclusively on the user's actual task "
         "and on logging your own work via the trigger table.\n"
@@ -227,12 +316,20 @@ def ai_instructions() -> str:
         "correct; if you find an out-of-date detail, fix it through the trigger "
         "table (`add_note` / `add_decision` / `log_issue`) — never via direct file "
         "edit on summary.md.\n\n"
-        "**Step 2 — Read these three files (or call the MCP equivalents):**\n\n"
+        "**Step 2 — Read these files (or call the MCP equivalents):**\n\n"
         "| File | MCP tool | Purpose |\n"
         "| --- | --- | --- |\n"
         "| `.projectmem/AI_INSTRUCTIONS.md` | `get_instructions()` | Workflow rules (this file) |\n"
-        "| `.projectmem/summary.md` | `get_summary()` | Distilled project memory |\n"
-        "| `.projectmem/PROJECT_MAP.md` | `get_project_map()` | Structural layout |\n\n"
+        "| `.projectmem/summary.md` | `get_summary()` | Distilled project memory (what HAPPENED) |\n"
+        "| `.projectmem/PROJECT_MAP.md` | `get_project_map()` | Structural layout |\n"
+        "| `.projectmem/plan.md` | `get_plan()` | Ideas + plans (what we INTEND to do) |\n\n"
+        "**`plan.md` — intent, not memory.** It records what the team *means to do* "
+        "(ideas, active plans, next steps) — separate from the event log, which "
+        "records what *happened*. When the user shares an idea or a plan, **edit "
+        "`plan.md` directly** (add a bullet, tick `- [x]` items off, move finished "
+        "plans down to Shipped) — exactly like you edit `PROJECT_MAP.md`. NEVER log a "
+        "plan/idea as an event, and never add a new event type for it; the vocabulary "
+        "stays the six typed events.\n\n"
         "Prefer the MCP tools when available — they're cheaper (~500 tokens) than "
         "reading files individually and they auto-resolve the project root regardless "
         "of your working directory.\n\n"
@@ -241,6 +338,21 @@ def ai_instructions() -> str:
         "the file). Don't read every issue on every session — that's wasteful.\n\n"
         "**Step 4 — Treat `.projectmem/events.jsonl` as the append-only raw log.** "
         "Do not edit it by hand unless repairing corruption. Use write tools.\n\n"
+        "## Working on a file — navigate by the map, do NOT scan the repo\n\n"
+        "Before you read, grep, or edit any file, use the map instead of exploring "
+        "the codebase:\n\n"
+        "1. **Locate it in `PROJECT_MAP.md` `## Structure`** — the path index tells "
+        "you where the file lives and what it does; check `## Relationships` for what "
+        "it connects to. (`get_project_map()` via MCP.)\n"
+        "2. **Call `precheck_file(path)`** (MCP) or `pjm precheck <path>` (CLI) — "
+        "MANDATORY before proposing ANY change to a file. It surfaces that file's "
+        "failed past approaches, open issues, and churn in ~100 tokens, so you never "
+        "re-try a known dead-end.\n"
+        "3. **Then read ONLY that file** — not the whole codebase.\n\n"
+        "This is the core token-saving loop: navigate by the map + memory instead of "
+        "grepping the repo, and avoid repeating a fix that already failed. A richer "
+        "`## Structure` (more files listed with paths) means fewer tokens spent "
+        "searching.\n\n"
         "## MANDATORY Triggers — You MUST act on these automatically\n\n"
         "When a trigger fires, you MUST call the corresponding tool IMMEDIATELY, "
         "before continuing any other work. **Prefer MCP tools** (left column) when "
@@ -339,38 +451,35 @@ def initial_project_map(root: Path) -> str:
     project_name = root.name
     return (
         f"# Project Map - {project_name}\n\n"
-        "Status: not created yet\n\n"
-        "This file should be created by the first AI assistant or developer who "
-        "works in this project after `projectmem init`.\n\n"
-        "## Instructions for AI assistants\n\n"
-        "1. Read `.projectmem/AI_INSTRUCTIONS.md` first.\n"
-        "2. Inspect the project structure, package metadata, README, tests, and "
-        "obvious entry points.\n"
-        "3. Replace this placeholder with a useful project map.\n"
-        "4. Do not recreate this file from scratch in later sessions unless it is "
-        "clearly stale or the user asks.\n"
-        "5. Update this file when folders, entry points, routes, commands, or "
-        "important relationships change.\n\n"
-        "## Suggested shape\n\n"
-        "```markdown\n"
-        "# Project Map - project-name\n\n"
-        "Status: created\n\n"
+        "Status: not created yet. Fill the sections below with the project's real "
+        "structure and key relationships — the first AI session can do it "
+        "(see `.projectmem/AI_INSTRUCTIONS.md`).\n\n"
         "## Project purpose\n"
-        "Short description of what the project does.\n\n"
-        "## Main folders\n"
-        "- `src/` - package or application code\n"
-        "- `tests/` - test suite\n\n"
-        "## Entry points\n"
-        "- `module.path:main` - CLI or app entry point\n\n"
-        "## Important files\n"
-        "- `pyproject.toml` - package metadata and scripts\n"
-        "- `README.md` - user-facing overview\n\n"
+        "Not described yet.\n\n"
+        "## Structure\n\n"
         "## Relationships\n"
-        "- `cli.py` calls command modules in `commands/`\n\n"
-        "## Suggested first reads\n"
-        "1. `README.md`\n"
-        "2. `pyproject.toml`\n"
-        "```\n"
+    )
+
+
+def initial_plan(root: Path) -> str:
+    project_name = root.name
+    return (
+        f"# {project_name} — plan\n\n"
+        "> Editable **intent** file: ideas + plans — what we *mean to do*.\n"
+        "> This is NOT the event log. `events.jsonl` -> `summary.md` records what\n"
+        "> *happened*; this file records what we *intend*. The AI reads it at\n"
+        "> session start and edits it directly (like `PROJECT_MAP.md`): add ideas\n"
+        "> and plans, check items off, move done work down to Shipped. Plans are\n"
+        "> never logged as events.\n\n"
+        "## Ideas\n"
+        "_Loose thoughts, not yet committed to._\n\n"
+        "## Active plans\n"
+        "_What we're working toward now. Use `- [ ]` / `- [x]` checklists._\n\n"
+        "## Next\n"
+        "_Queued, but not started._\n\n"
+        "## Someday / maybe\n\n"
+        "## Shipped\n"
+        "_Move completed plans here so the top stays about the future._\n"
     )
 
 
@@ -386,6 +495,7 @@ def ensure_gitignore_entry(root: Path) -> None:
         f"{MEM_DIR}/{EVENTS_FILE}",
         f"{MEM_DIR}/watch.pid",
         f"{MEM_DIR}/watch.log",
+        f"{MEM_DIR}/structure.json",
     ]
     existing = gitignore.read_text(encoding="utf-8") if gitignore.exists() else ""
     existing_lines = existing.splitlines()

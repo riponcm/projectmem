@@ -69,7 +69,7 @@ def test_stack_detect_pyproject_populates_map(tmp_path: Path) -> None:
     assert "auto-detected" in map_text
     assert "A demo CLI built with Typer and pydantic." in map_text
     assert "fastapi" in map_text
-    assert "## Main folders" in map_text
+    assert "## Structure" in map_text
     assert "`src/`" in map_text
     assert "`tests/`" in map_text
     assert "`demo`" in map_text  # entry point

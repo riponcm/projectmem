@@ -27,6 +27,8 @@ from projectmem.commands import search as search_command
 from projectmem.commands import show as show_command
 from projectmem.commands import stats as stats_command
 from projectmem.commands import visualize as visualize_command
+from projectmem.commands import dashboard as dashboard_command
+from projectmem.commands import plan as plan_command
 from projectmem.commands import watch as watch_command
 from projectmem.commands import wrap as wrap_command
 from projectmem.storage import ProjectMemError
@@ -53,6 +55,7 @@ def init(
     no_claude_md: bool = typer.Option(False, "--no-claude-md", help="Skip writing/updating the CLAUDE.md bridge block."),
     no_stack_detect: bool = typer.Option(False, "--no-stack-detect", help="Skip auto-populating PROJECT_MAP.md from detected stack."),
     no_mcp_config: bool = typer.Option(False, "--no-mcp-config", help="Skip printing the MCP client config block at the end."),
+    no_structure: bool = typer.Option(False, "--no-structure", help="Skip building the code-structure cache (.projectmem/structure.json)."),
     global_tags: str | None = typer.Option(None, "--global-tags", help="Only inherit matching tags (comma-separated)."),
 ) -> None:
     """Create .projectmem/ in the current repo."""
@@ -60,7 +63,7 @@ def init(
         no_hooks=no_hooks, no_global=no_global, no_watch=no_watch,
         no_backfill=no_backfill, no_claude_md=no_claude_md,
         no_stack_detect=no_stack_detect, no_mcp_config=no_mcp_config,
-        global_tags=global_tags,
+        no_structure=no_structure, global_tags=global_tags,
     )
 
 
@@ -70,10 +73,32 @@ def instructions() -> None:
     instructions_command.run()
 
 
+@app.command("plan")
+def plan(
+    add: str | None = typer.Argument(
+        None, help="Optional: append this as a bullet under Ideas. "
+                   "Omit to print plan.md.",
+    ),
+) -> None:
+    """Print the project plan (intent file) — or append an idea with `pjm plan \"...\"`.
+
+    plan.md holds ideas + plans (what you MEAN to do). It is NOT the event log —
+    it's edited directly (by you or your AI), never logged as events.
+    """
+    plan_command.run(add=add)
+
+
 @app.command("map")
-def project_map() -> None:
-    """Print the project map."""
-    map_command.run()
+def project_map(
+    build: bool = typer.Option(
+        False, "--build",
+        help="Extract code structure into .projectmem/structure.json "
+             "(recursive files + Python import relationships). A derived, "
+             "gitignored cache — never touches your memory.",
+    ),
+) -> None:
+    """Print the project map — or --build the code-structure cache."""
+    map_command.run(build=build)
 
 
 @app.command()
@@ -221,6 +246,41 @@ def visualize(
 ) -> None:
     """Generate an interactive visualization of project memory."""
     visualize_command.run(output=output, open_browser=open_browser)
+
+
+@app.command("dashboard")
+def dashboard(
+    output: Path | None = typer.Option(
+        None, "--output", "-o",
+        help="Directory for the global dashboard. Default: ~/.projectmem/dashboard/",
+    ),
+    open_browser: bool = typer.Option(
+        True, "--open/--no-open",
+        help="Auto-open in the default browser (use --no-open in CI / headless).",
+    ),
+    serve: bool = typer.Option(
+        False, "--serve",
+        help="Live mode: a tiny local server renders everything fresh on each "
+             "load, so Refresh pulls the latest. Ephemeral — Ctrl+C to stop.",
+    ),
+    port: int = typer.Option(
+        8787, "--port",
+        help="Port for --serve (default 8787).",
+    ),
+) -> None:
+    """Cross-project GLOBAL dashboard over every project you've `pjm init`-ed.
+
+    Reads each repo's own .projectmem/ live (nothing centralized), aggregates
+    grades / issues / savings, and links each card to that repo's own
+    freshly-generated dashboard.
+
+    Default is serverless: writes a static snapshot and opens it — re-run to
+    refresh. Add --serve for a live, ephemeral local server where the Refresh
+    button re-reads your files (no background daemon; Ctrl+C ends it).
+    """
+    dashboard_command.run(
+        output=output, open_browser=open_browser, serve=serve, port=port
+    )
 
 
 @app.command()

@@ -46,36 +46,9 @@
 | Doc | What's in it |
 |---|---|
 | **[TUTORIAL.md](TUTORIAL.md)** | 15-minute step-by-step walkthrough — set up projectmem on your own project, watch the lifecycle, see the pre-commit warning fire. |
-| **[CHANGELOG.md](CHANGELOG.md)** | Release history. Latest: v0.1.6 — the visualization release: the Showoff tab (animated story scenes + built-in video recorder), the Flow project map, and the Time Spine timeline. |
+| **[CHANGELOG.md](CHANGELOG.md)** | Release history. Latest: v0.2.0 — the workspace release: the cross-project `pjm dashboard` (serverless + live `--serve`), code structure & relations with failure-heat overlay, and the `plan.md` intent file. |
 | **[Research paper (arXiv:2606.12329)](https://arxiv.org/abs/2606.12329)** | *PROJECTMEM: A Local-First, Event-Sourced Memory and Judgment Layer for AI Coding Agents* — the peer-readable version: design, Memory-as-Governance framing, capability comparison, and the 207-event dogfooding study. |
 | **[LICENSE](LICENSE)** | MIT |
-
----
-
-## ✨ New in 0.1.6 — the visualization release
-
-Your project's memory is now something you can *watch* — and share.
-
-- 🎬 **Showoff** — a new dashboard tab with three animated story scenes, all rendered from your real event log: **Story Replay** (watch your project's history build itself, node by node), **Orbit** (files orbit the project, events orbit their file), and **Universe** (your project as a rotating galaxy — every bright star is a real issue, attempt, fix, or decision; click one for its full details).
-- ⏺ **Built-in recorder** — hit REC (10–60 s) and Showoff downloads a `.webm` clip of the animation, rendered 100% locally with a "made with projectmem" badge. Your debugging story, ready for a tweet or a standup.
-- 🗺️ **Flow** — the Project Map's new default view: a layered flowchart reading `PROJECT → DIRECTORIES → FILES → WHAT HAPPENED → MEMORY`. Files with repeated failures glow red along their path, every file shows its outcome chips, and everything flows into the `events.jsonl` cylinder. Zoom, pan, or collapse the details pane. Tree and Graph views are one click away.
-- 🧵 **Time Spine** — the Timeline's new default view: a real-time axis you scroll, with **problems branching left** (issues, failed attempts) and **knowledge branching right** (fixes, decisions, notes). Hover any card and its whole issue thread lights up. The classic list remains as "Details".
-- 🛡️ Also included: v0.1.5's reliability fixes (`pjm fix --issue <id>` targeted closing, hang-proof MCP git calls, encoding-safe console output on Windows) — community-contributed by [@hanley-development](https://github.com/hanley-development), who also built the Story Map readability controls in this release.
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/brand/dashboard-showoff-universe.png" alt="Showoff — your project as a rotating galaxy, every star a real event" width="800" />
-  <br /><em>Showoff · Universe — every bright star is a real event from this project's memory</em>
-</p>
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/brand/dashboard-projectmap-flow.png" alt="Flow — layered project map from project to memory" width="800" />
-  <br /><em>Project Map · Flow — what happened, file by file, flowing into append-only memory</em>
-</p>
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/brand/dashboard-timeline-spine.png" alt="Time Spine — problems branch left, knowledge branches right" width="800" />
-  <br /><em>Timeline · Time Spine — problems on the left, knowledge on the right, real time down the middle</em>
-</p>
 
 ---
 
@@ -101,6 +74,50 @@ That's it. `pjm init` installs three git hooks (pre-commit warnings, post-commit
 
 > The canonical command is `projectmem`. A `pjm` alias is installed for speed.
 
+---
+
+## ✨ New in 0.2.0 — the workspace release
+
+0.1.6 made *one* project's memory something you could watch. **0.2.0 lifts that to your whole workspace — and closes the gap between what *happened* (memory) and what your code *is* (structure).**
+
+- 🌐 **Global dashboard** — `pjm dashboard` is one page over *every* project you've `pjm init`-ed: total issues captured, fixes confirmed, dead-ends prevented, tokens saved, a grade per project, and a "needs attention" list. Click any card to open that repo's own dashboard, generated fresh. It's a global **view, not a global store** — each repo's `.projectmem/` is aggregated at read time and never leaves its folder. Default is serverless (a static snapshot); add **`--serve`** for a tiny, ephemeral live server where the Refresh button re-reads your files — no background daemon, **Ctrl+C** stops it.
+- 🧬 **Structure & relations** — `pjm map --build` (run automatically at `pjm init`) walks your codebase and, for Python, resolves imports into a real dependency graph. The Project Map's **Graph** and **Flow** views now render actual files and the import edges between them. The cache (`structure.json`) is derived from code, gitignored, and never committed — code is only ever *read*.
+- 🔥 **Failure heat on structure** *(the combo)* — the one view a pure code-grapher can't draw and a pure memory tool can't either: files with repeated failed attempts glow red, laid directly over the real import graph. Structure comes from the code, heat comes from your memory, and they meet only in the renderer.
+- 🗂️ **`plan.md`** — a new editable intent file: **ideas and plans, what you *mean* to do** — deliberately *not* the event log. `events.jsonl → summary.md` records what happened; `plan.md` records what you intend. The AI reads it at session start and edits it directly; a plan never becomes an event. `pjm plan` / `pjm plan "idea"` / MCP `get_plan()`.
+
+Everything stays 100% local — the global dashboard is a read-time aggregate, never a central honeypot of your code's history.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/brand/dashboard-global.png" alt="projectmem global dashboard — every project in one read-time view" width="880" />
+  <br /><em>Global Dashboard — every <code>pjm init</code>-ed project in one view: grades, issues, savings, and a "needs attention" list, aggregated at read time. Each card opens that repo's own dashboard.</em>
+</p>
+
+### The visualization suite (shipped in 0.1.6)
+
+Your project's memory is also something you can *watch* — and share.
+
+- 🎬 **Showoff** — a dashboard tab with three animated story scenes, all rendered from your real event log: **Story Replay** (watch your project's history build itself, node by node), **Orbit** (files orbit the project, events orbit their file), and **Universe** (your project as a rotating galaxy — every bright star is a real issue, attempt, fix, or decision; click one for its full details).
+- ⏺ **Built-in recorder** — hit REC (10–60 s) and Showoff downloads a `.webm` clip of the animation, rendered 100% locally with a "made with projectmem" badge. Your debugging story, ready for a tweet or a standup.
+- 🗺️ **Flow** — the Project Map's default view: a layered flowchart reading `PROJECT → DIRECTORIES → FILES → WHAT HAPPENED → MEMORY`. Files with repeated failures glow red along their path, every file shows its outcome chips, and everything flows into the `events.jsonl` cylinder. Tree and Graph views are one click away.
+- 🧵 **Time Spine** — the Timeline's default view: a real-time axis you scroll, with **problems branching left** (issues, failed attempts) and **knowledge branching right** (fixes, decisions, notes). Hover any card and its whole issue thread lights up. The classic list remains as "Details".
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/brand/dashboard-showoff-universe.png" alt="Showoff — your project as a rotating galaxy, every star a real event" width="800" />
+  <br /><em>Showoff · Universe — every bright star is a real event from this project's memory</em>
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/brand/dashboard-projectmap-flow.png" alt="Flow — layered project map from project to memory" width="800" />
+  <br /><em>Project Map · Flow — what happened, file by file, flowing into append-only memory</em>
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/brand/dashboard-timeline-spine.png" alt="Time Spine — problems branch left, knowledge branches right" width="800" />
+  <br /><em>Timeline · Time Spine — problems on the left, knowledge on the right, real time down the middle</em>
+</p>
+
+---
+
 ## Why You'll Love It
 
 - **Pre-Commit Warnings** — `pjm precheck` warns you *before* you commit if you're about to repeat a failed approach, modify a high-churn file, or touch an unresolved issue. No other AI tool does this — it requires the memory layer underneath. The warning now lists the dead ends themselves (*"What already failed here: ✗ tried CSS contain:layout"*), and `pjm precheck --snooze 2h` silences it politely — the snooze is itself logged, so even the silence is audited.
@@ -111,8 +128,11 @@ That's it. `pjm init` installs three git hooks (pre-commit warnings, post-commit
 - **Provable ROI Score** — `pjm score` outputs a letter grade (A+ → F) backed by concrete numbers — debugging hours saved, tokens prevented, dollars protected. CI-friendly JSON output and shields.io badge for your README.
 - **Cross-Project Memory** — Lessons learned in one repo follow you forever. Library gotchas, decisions, and patterns live in `~/.projectmem/global/` and auto-inherit into every new project that matches your stack.
 - **Real-time File Watcher** — Background daemon detects rapid edits to the same file (debugging sessions) between commits. Battery-aware, gitignore-aware, auto-started by `pjm init`.
-- **Native MCP Server** — Plugs into Claude Desktop, Cursor, Antigravity, Codex, and any MCP-compatible tool. 14 native tools force the AI to read context, check files for known failures, and log work automatically. Verified end-to-end against all four clients.
-- **Interactive Dashboard** *(expanded in 0.1.6)* — `pjm visualize` opens a six-tab local dashboard: Overview, Story Map (failure heatmap with collapse/focus controls), ROI Dashboard, Project Map (**Flow** / Tree / Graph), Timeline (**Time Spine** / Details), and **Showoff** — animated story scenes with a built-in video recorder.
+- **Native MCP Server** — Plugs into Claude Desktop, Cursor, Antigravity, Codex, and any MCP-compatible tool. 15 native tools force the AI to read context, check files for known failures, read your `plan.md`, and log work automatically. Verified end-to-end against all four clients.
+- **Interactive Dashboard** *(expanded in 0.1.6)* — `pjm visualize` opens a six-tab local dashboard: Overview, Story Map (failure heatmap with collapse/focus controls), ROI Dashboard, Project Map (**Flow** / Tree / Graph, now over your real code structure), Timeline (**Time Spine** / Details), and **Showoff** — animated story scenes with a built-in video recorder.
+- **Global Dashboard** *(new in 0.2.0)* — `pjm dashboard` is one cross-project view over every repo you've `pjm init`-ed: grades, issues, savings, and per-project drill-in. A global *view*, never a global *store* — each repo's memory is aggregated at read time and never leaves its folder. Serverless by default; `--serve` for an ephemeral live server (Ctrl+C to stop).
+- **Code Structure + Judgment** *(new in 0.2.0)* — `pjm map --build` reads your codebase into a real import graph, and the Project Map overlays **failure heat** from your event log on top: the files that keep breaking, glowing red over the structure that actually connects them. The structure cache is derived from code and gitignored — never committed.
+- **Intent, separate from memory** *(new in 0.2.0)* — `plan.md` holds ideas and plans (what you *mean* to do), kept deliberately apart from the append-only event log (what *happened*). `pjm plan`, or the MCP `get_plan()`; the AI edits it directly and a plan never becomes an event.
 - **100% Local** — No cloud, no telemetry, no accounts. Your code, your memory, your machine.
 
 ## How It Compares
@@ -129,12 +149,22 @@ That's it. `pjm init` installs three git hooks (pre-commit warnings, post-commit
 | Cross-project memory | ✅ library-scoped | 🟡 | 🟡 | 🟡 | 🟡 |
 | Provable ROI score | ✅ A+ → F + $ | ❌ | ❌ | ❌ | ❌ |
 | Plain-text, greppable store | ✅ events.jsonl | ❌ | ❌ | ❌ | 🟡 |
-| No server / DB to run | ✅ stdio + files | ❌ | ❌ | ❌ | ❌ server + DB |
+| No persistent server or DB | ✅ stdio + files † | ❌ | ❌ | ❌ | ❌ server + DB |
 | No telemetry, no accounts | ✅ | ❌ default-on | ✅ | ❌ | 🟡 |
-| Native MCP server | ✅ 14 focused tools | ✅ | 🟡 53 tools | 🟡 | 🟡 |
+| Native MCP server | ✅ 15 focused tools | ✅ | 🟡 53 tools | 🟡 | 🟡 |
+| Global dashboard (all repos) | ✅ read-time, local | ❌ | 🟡 central store | ❌ | ❌ |
+| Editable intent (plan ≠ memory) | ✅ `plan.md` | ❌ | ❌ | ❌ | 🟡 |
 | Price | ✅ Free · MIT | Free + paid tier | Free | Freemium | Free + cloud |
 
 <sub>✅ yes · 🟡 partial · ❌ no — snapshot June 2026; design capabilities, not benchmark results. claude-mem runs a background worker (port 37777) and enables telemetry by default (v13.5+); agentmemory down-ranks and prunes old memories via decay, mem0 rewrites facts on update, Letta's memory blocks self-edit in place — projectmem never deletes: it flags staleness and lets you decide. Letta requires a running server (Postgres or cloud).</sub>
+
+<sub>† There is **no database** and **nothing you have to keep running**: the MCP server is a stdio subprocess your AI client spawns, and everything else is plain files. The only server anywhere is the *optional* `pjm dashboard --serve`, an ephemeral local viewer you start and stop with Ctrl+C — never a background service.</sub>
+
+## 🚧 Upcoming
+
+- **Import your existing memory** — `pjm import` *(planned for 0.2.1)* will migrate history from **mem0**, **agentmemory**, **Letta**, and Claude session logs into projectmem. It maps only to the core event vocabulary — issues, attempts, fixes, decisions, notes — so signal comes in and another tool's clutter stays out. Your judgment history moves with you.
+
+Want a source supported? [Open an issue](https://github.com/riponcm/projectmem/issues) and tell us what you're migrating from.
 
 ## How AI Reads Your Memory (Token Efficiency)
 
@@ -150,6 +180,30 @@ The architecture is built around one rule: **AI reads small, distilled files. To
 **AI never reads `events.jsonl` directly.** That file is for tools (`pjm score`, `pjm context`, `pjm wrap`). Tools distill the raw log into compact AI-readable summaries.
 
 ## MCP Integration (Recommended)
+
+**For:** Claude Desktop, Cursor, Antigravity, Codex — and any tool with native MCP support. The MCP server forces the AI to read memory and log every action automatically.
+
+### The 3-minute workflow (let your AI do the setup)
+
+1. **Install + init.** `pip install projectmem`, then `cd` into your project and run `pjm init` — or simply ask your AI to run it.
+2. **Ask your AI to set up the projectmem MCP server for you** — it can edit the client's config file itself. (It needs permission to do that: use Auto / accept-edits mode, or approve the file edit when asked. The exact config per client is in the sections below if you'd rather paste it by hand.)
+3. **Restart the AI tool** so the MCP server loads, then start your session with this prompt:
+
+```text
+Hi — I use projectmem as this project's memory. Before anything else,
+call get_instructions(), then get_summary(), then get_project_map() to
+load what we already know. As we work, log issues, attempts
+(failed/worked), fixes, decisions, and notes with the projectmem tools,
+and call precheck_file(path) before you edit a file. Ideas and plans go
+in plan.md via get_plan() — never as events.
+```
+
+Strictly speaking this prompt is optional — with the MCP server installed correctly the AI discovers the memory on its own. But saying it makes capture noticeably more consistent, so we recommend it.
+
+- **Repeat for every project:** `pjm init` + the same kickoff prompt.
+- **Coming back after closing the window?** Open with a one-line reminder — *"Reminder: we use projectmem as memory here."* — and the whole setup carries on where you left off.
+
+> Prefer to wire it up by hand? The exact, verified config for each client follows.
 
 ### Claude Desktop
 
@@ -235,7 +289,7 @@ Paste this block:
 }
 ```
 
-Then **fully quit Antigravity (Cmd+Q on Mac)** and reopen — MCP servers only initialize on cold start. All 14 projectmem tools register identically to Claude Desktop / Cursor.
+Then **fully quit Antigravity (Cmd+Q on Mac)** and reopen — MCP servers only initialize on cold start. All 15 projectmem tools register identically to Claude Desktop / Cursor.
 
 ### Codex
 
@@ -286,15 +340,16 @@ root or rely on the parent-walk auto-discovery.
 
 ### MCP Tools Exposed
 
-All 14 tools your AI can call:
+All 15 tools your AI can call:
 
-**Read-side (9 tools):**
+**Read-side (10 tools):**
 
 | Tool | When to use |
 |---|---|
 | `get_instructions()` | Start of every session — load workflow rules |
 | `get_summary()` | Start and end — distilled project memory |
 | `get_project_map()` | Start — understand repo structure |
+| `get_plan()` | Read `plan.md` — the ideas + plans (intent), separate from the event log |
 | `precheck_file(path)` | Before editing any file — surface failure history |
 | `get_issue(id)` | Read one specific issue's full history by ID |
 | `search_events(query)` | Plain-text search across all logged events |
@@ -324,6 +379,7 @@ All 14 tools your AI can call:
 | `pjm fix <text> [--issue <id>]` | Record the confirmed fix and close the issue — `--issue` targets a specific one *(new in 0.1.5)* |
 | `pjm decision <text> [--supersedes <id>]` | Record an architectural decision; optionally retire a prior one (old event stays in the log, tagged) |
 | `pjm note <text>` | Record durable context or a gotcha |
+| `pjm plan ["idea"]` | Print `plan.md` (ideas + plans); with text, append an idea. Intent, **not** an event *(new in 0.2.0)* |
 | `pjm show` | Print the current summary |
 | `pjm search <query> [--failed-only]` | Plain-text search across all events; `--failed-only` lists the project's dead ends |
 | `pjm brief` | One-screen session-start briefing: warnings, stale memories, open issues, decisions, score |
@@ -368,12 +424,23 @@ project's repo-local events or summary.
 | Command | Purpose |
 |---|---|
 | `pjm visualize` | Open the six-tab local dashboard (Overview, Story Map, ROI, Project Map, Timeline, Showoff) |
+| `pjm dashboard [--serve] [--port N]` | Cross-project **global** dashboard over every `pjm init`-ed repo; default writes a static snapshot, `--serve` runs an ephemeral live server (Ctrl+C to stop) *(new in 0.2.0)* |
+| `pjm map [--build]` | Print the Project Map; `--build` (re)builds the code structure + import graph into `structure.json` (a derived, gitignored cache) *(new in 0.2.0)* |
 | `pjm stats` | Token ROI summary in the terminal |
 | `pjm backfill` | Auto-populate memory from git history |
 | `pjm hooks install\|uninstall` | Manage git hooks manually |
 | `pjm regenerate` | Rebuild `summary.md` from `events.jsonl` |
 
 > Use `--at "file.py:42"` with any logging command to attach precise location metadata.
+
+### `plan.md` — intent, kept separate from memory
+
+`pjm init` scaffolds a `.projectmem/plan.md`: your **ideas and plans — what you *mean* to do**, in plain Markdown (Ideas · Active plans · Next · Someday · Shipped). It's the one file that is deliberately **not** the event log:
+
+- `events.jsonl → summary.md` records what *happened* (append-only, never rewritten).
+- `plan.md` records what you *intend* — and you (or the AI) edit it directly, like `PROJECT_MAP.md`.
+
+Your AI reads it at session start via `get_plan()` and updates it in place: adding ideas, checking items off, moving finished work down to **Shipped**. A plan is never logged as an event, so intent stays cleanly out of your memory's audit trail. `pjm plan` prints it; `pjm plan "auto-batch the exporter"` appends an idea. It's committed (not gitignored) so intent is shared with your team.
 
 ## Example: Pre-Commit Warnings in Action
 

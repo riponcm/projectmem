@@ -19,6 +19,7 @@ def run(
     no_claude_md: bool = False,
     no_stack_detect: bool = False,
     no_mcp_config: bool = False,
+    no_structure: bool = False,
     global_tags: str | None = None,
     root: Path | None = None,
 ) -> None:
@@ -40,6 +41,23 @@ def run(
     # placeholder, never clobbers AI/human edits.
     if not no_stack_detect:
         _populate_project_map_from_stack(root_path)
+
+    # Build the code-structure cache (recursive files + Python import
+    # relationships) so the Project Map view renders the real structure right
+    # away. Derived from code into .projectmem/structure.json — a disposable,
+    # gitignored cache that never touches memory (events/summary/PROJECT_MAP).
+    if not no_structure:
+        try:
+            from projectmem.structure import write_structure
+
+            _, _sdata = write_structure(root_path)
+            _st = _sdata["stats"]
+            typer.echo(
+                f"  Code structure mapped — {_st['files']} files, "
+                f"{_st['relationships']} relationships (see the Project Map)."
+            )
+        except Exception:
+            pass  # structure is a nicety; never let it break init
 
     # Auto-install git hooks unless opted out
     if not no_hooks:
@@ -344,9 +362,9 @@ def _populate_project_map_from_stack(root: Path) -> None:
         lines.append("")
 
     if main_folders:
-        lines.append("## Main folders")
+        lines.append("## Structure")
         for name, desc in main_folders:
-            lines.append(f"- `{name}/` — {desc}")
+            lines.append(f"- `{name}/` — {desc}" if desc else f"- `{name}/`")
         lines.append("")
 
     if entry_points:
@@ -470,13 +488,37 @@ _COMMON_FOLDERS = {
 }
 
 
+# Top-level folders that never belong in a project map (deps, caches, VCS,
+# build output, virtualenvs). Everything else is real project structure.
+_IGNORE_FOLDERS = {
+    ".git", ".hg", ".svn", ".projectmem", ".idea", ".vscode",
+    ".pytest_cache", ".mypy_cache", ".ruff_cache", "__pycache__",
+    "node_modules", "venv", "env", "virtualenv", ".tox", ".eggs",
+    "build", "dist", "target", ".gradle", "htmlcov", "coverage",
+    ".next", ".nuxt", ".cache", "site-packages",
+}
+
+
 def _detect_main_folders(root: Path) -> list[tuple[str, str]]:
-    """Glob common top-level folder names and report which ones exist."""
+    """List the project's REAL top-level folders (skipping deps/caches/build).
+
+    Walks the actual directory instead of matching a fixed name list, so the
+    map reflects THIS project's structure (e.g. `core/`, `features/`) rather
+    than only ever finding `src/`/`tests/`. Known names keep a friendly
+    description; the rest are listed as-is for an AI session to annotate.
+    """
     found: list[tuple[str, str]] = []
-    for name, desc in _COMMON_FOLDERS.items():
-        path = root / name
-        if path.is_dir() and not name.startswith("."):
-            found.append((name, desc))
+    try:
+        entries = sorted(p for p in root.iterdir() if p.is_dir())
+    except OSError:
+        return found
+    for path in entries:
+        name = path.name
+        if name.startswith(".") or name in _IGNORE_FOLDERS:
+            continue
+        found.append((name, _COMMON_FOLDERS.get(name, "")))
+        if len(found) >= 15:  # keep the map readable on sprawling repos
+            break
     return found
 
 

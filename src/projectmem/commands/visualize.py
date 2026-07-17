@@ -31,13 +31,43 @@ def run(
     project_root = mem_dir.parent
     graph_data = build_graph_data(events, root=project_root)
 
-    # 2. Read PROJECT_MAP.md for the Project Map tab
+    # 2. Project Map data. The details panel always shows PROJECT_MAP.md (the
+    #    curated memory). The GRAPH prefers the extracted structure.json (deep:
+    #    all files + real import relationships), falling back to the curated map
+    #    when structure hasn't been built. Structure is derived from code and
+    #    never mixed into memory — they only meet here, in the renderer.
+    from projectmem.structure import structure_path
+
     map_path = project_map_path(root)
-    project_map_text = ""
+    project_map_text = map_path.read_text(encoding="utf-8") if map_path.exists() else ""
     project_map_graph = {"nodes": [], "links": []}
-    if map_path.exists():
-        project_map_text = map_path.read_text(encoding="utf-8")
+    struct_path = structure_path(root)
+    if struct_path.exists():
+        try:
+            project_map_graph = build_structure_graph(
+                json.loads(struct_path.read_text(encoding="utf-8"))
+            )
+        except (json.JSONDecodeError, OSError):
+            project_map_graph = {"nodes": [], "links": []}
+    if not project_map_graph["nodes"] and project_map_text:
         project_map_graph = build_project_map_graph(project_map_text)
+
+    # THE COMBO: overlay event/failure heat onto the structure nodes, matched
+    # by file PATH (not basename — many repos have several __init__.py). Hot
+    # files then light up on the real code map. This is the only place
+    # structure (from code) and judgment (from events) meet — in the renderer.
+    _heat: dict[str, tuple[int, int]] = {}
+    for gn in graph_data.get("nodes", []):
+        if gn.get("type") == "file":
+            fc, ec = gn.get("failure_count", 0), gn.get("event_count", 0)
+            for key in (gn.get("full_path"), gn.get("id")):
+                if key:
+                    _heat.setdefault(key, (fc, ec))
+    for sn in project_map_graph.get("nodes", []):
+        if sn.get("type") == "file":
+            hit = _heat.get(sn.get("full_path")) or _heat.get(sn.get("id"))
+            if hit:
+                sn["failure_count"], sn["event_count"] = hit
 
     # 3. Build timeline data for the Timeline tab
     timeline_data = build_timeline_data(events)
@@ -142,6 +172,48 @@ def _file_graph_metadata(
         "dense_event_threshold": DENSE_FILE_EVENT_THRESHOLD,
         "is_dense": event_count >= DENSE_FILE_EVENT_THRESHOLD,
     }
+
+
+def build_structure_graph(structure: dict[str, Any]) -> dict[str, Any]:
+    """Convert structure.json (files + import relationships) into the same
+    node/link shape the Project Map renderers consume — so the Tree / Graph
+    views show the FULL extracted structure instead of only the curated map.
+    """
+    nodes: list[dict[str, Any]] = []
+    links: list[dict[str, Any]] = []
+    node_ids: set[str] = set()
+
+    def add(nid: str, label: str, ntype: str) -> None:
+        if nid and nid not in node_ids:
+            node_ids.add(nid)
+            nodes.append({"id": nid, "label": label, "type": ntype, "full_path": nid})
+
+    files = structure.get("files", [])
+    dirs: set[str] = set()
+    for f in files:
+        parts = f.split("/")
+        for i in range(1, len(parts)):
+            dirs.add("/".join(parts[:i]) + "/")
+    for d in sorted(dirs):
+        add(d, d.rstrip("/").split("/")[-1] + "/", "folder")
+    for f in files:
+        add(f, f.split("/")[-1], "file")
+
+    # Hierarchy: each node → its parent directory.
+    for nid in list(node_ids):
+        stem = nid.rstrip("/")
+        parent = "/".join(stem.split("/")[:-1])
+        parent = (parent + "/") if parent else ""
+        if parent and parent in node_ids:
+            links.append({"source": nid, "target": parent})
+
+    # Import relationships (the real "relations").
+    for r in structure.get("relationships", []):
+        s, t = r.get("source"), r.get("target")
+        if s in node_ids and t in node_ids:
+            links.append({"source": s, "target": t, "relation": r.get("kind", "imports")})
+
+    return {"nodes": nodes, "links": links}
 
 
 def build_project_map_graph(map_text: str) -> dict[str, Any]:
@@ -645,6 +717,10 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
         .map-graph-pane.tree-mode #map-canvas { display:none; }
         .map-graph-pane.tree-mode #map-tree { display:block; }
         #map-flow { position:absolute; inset:0; overflow:hidden; display:none; }
+        .flow-filter::-webkit-scrollbar { width:6px; } .flow-filter::-webkit-scrollbar-thumb { background:var(--border-light); border-radius:3px; }
+        .flow-filter .ff-row:hover { background:var(--surface2); }
+        .flow-zoom button:hover { background:var(--surface2); }
+        #map-content .md-pre { background:var(--surface2); border:1px solid var(--border-light); border-radius:8px; padding:10px 12px; margin:8px 0; font-family:ui-monospace,Menlo,monospace; font-size:11.5px; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--text-dim); }
         .map-graph-pane.flow-mode #map-canvas, .map-graph-pane.flow-mode #map-tree { display:none; }
         .map-graph-pane.flow-mode #map-flow { display:block; }
         .map-graph-pane.flow-mode .map-legend { display:none; }
@@ -1189,6 +1265,19 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
     const score = {{SCORE_DATA}};
     const projectName = {{PROJECT_NAME}};
 
+    // Compact number formatting so big stats fit the cards: 10k+ -> K, 1M+ -> M,
+    // 1B+ -> B. Below 10,000 keep the exact comma-grouped value (and decimals,
+    // e.g. USD). One decimal, trailing .0 dropped: 70000->70K, 12500->12.5K,
+    // 1500000->1.5M, 280000->280K.
+    function fmtNum(n) {
+        const abs = Math.abs(n);
+        const one = v => (Math.round(v * 10) / 10).toString();
+        if (abs >= 1e9) return one(n / 1e9) + 'B';
+        if (abs >= 1e6) return one(n / 1e6) + 'M';
+        if (abs >= 1e4) return one(n / 1e3) + 'K';
+        return n.toLocaleString();
+    }
+
     // ── Animated Counter ──
     function animateValue(el, end, prefix='', suffix='', duration=800) {
         let start = 0;
@@ -1197,9 +1286,9 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
             const progress = Math.min((now - startTime) / duration, 1);
             const ease = 1 - Math.pow(1 - progress, 3);
             const current = Math.floor(ease * end);
-            el.textContent = prefix + current.toLocaleString() + suffix;
+            el.textContent = prefix + fmtNum(current) + suffix;
             if (progress < 1) requestAnimationFrame(step);
-            else el.textContent = prefix + end.toLocaleString() + suffix;
+            else el.textContent = prefix + fmtNum(end) + suffix;
         }
         requestAnimationFrame(step);
     }
@@ -1933,7 +2022,7 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
         const row = document.createElement('div');
         row.className = 'roi-bar-row animate-in';
         row.style.animationDelay = (0.3+i*0.06)+'s';
-        row.innerHTML = '<div class="roi-bar-label">'+key.replace(/_/g,' ')+'</div><div class="roi-bar-track"><div class="roi-bar-fill" style="width:0%;background:'+(barColors[key]||'#3b82f6')+'"></div></div><div class="roi-bar-val">'+val.toLocaleString()+'</div>';
+        row.innerHTML = '<div class="roi-bar-label">'+key.replace(/_/g,' ')+'</div><div class="roi-bar-track"><div class="roi-bar-fill" style="width:0%;background:'+(barColors[key]||'#3b82f6')+'"></div></div><div class="roi-bar-val">'+fmtNum(val)+'</div>';
         barsEl.appendChild(row);
         setTimeout(() => { row.querySelector('.roi-bar-fill').style.width = pct+'%'; }, 400+i*80);
     });
@@ -1962,7 +2051,7 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
     // Center label
     donutSvg.append("text").attr("text-anchor","middle").attr("dy","-0.2em")
         .attr("fill","var(--text)").attr("font-size","18px").attr("font-weight","800")
-        .text(total.toLocaleString());
+        .text(fmtNum(total));
     donutSvg.append("text").attr("text-anchor","middle").attr("dy","1.2em")
         .attr("fill","var(--text-dim)").attr("font-size","10px")
         .text("tokens");
@@ -2030,7 +2119,16 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
     // TAB 3: Project Map
     // ══════════════════════════════════════════
     function renderMarkdown(md) {
-        return md
+        // Pull fenced ``` blocks out FIRST so their backticks/indentation don't collide
+        // with the inline-code and paragraph rules below (they'd render as empty <code>
+        // boxes + a stray trailing ``). Restored as <pre> at the end.
+        const fences = [];
+        md = md.replace(/```[\\w-]*\\n?([\\s\\S]*?)```/g, function (_, code) {
+            const esc = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            fences.push('<pre class="md-pre">' + esc.replace(/\\n$/, '') + '</pre>');
+            return '@@FENCE' + (fences.length - 1) + '@@';
+        });
+        let html = md
             .replace(/^### (.+)$/gm, '<h3>$1</h3>')
             .replace(/^## (.+)$/gm, '<h2>$1</h2>')
             .replace(/^# (.+)$/gm, '<h1>$1</h1>')
@@ -2038,9 +2136,10 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
             .replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>')
             .replace(/^- (.+)$/gm, '<li>$1</li>')
             .replace(/(<li>.*<\\/li>)/s, '<ul>$1</ul>')
-            .replace(/^(?!<[hul])(\\S.*)$/gm, '<p>$1</p>')
+            .replace(/^(?!<[hul]|@@FENCE)(\\S.*)$/gm, '<p>$1</p>')
             .replace(/\\n\\n/g, '')
             .replace(/((?:<li>[^]*?<\\/li>\\s*)+)/g, '<ul>$1</ul>');
+        return html.replace(/@@FENCE(\\d+)@@/g, function (_, i) { return fences[+i]; });
     }
     document.getElementById('map-content').innerHTML = renderMarkdown(projectMap);
 
@@ -2050,7 +2149,8 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
         const mH = window.innerHeight - 56;
         const mG = mSvg.append("g");
 
-        mSvg.call(d3.zoom().scaleExtent([0.5,4]).on("zoom", e => mG.attr("transform",e.transform)));
+        const mZoom = d3.zoom().scaleExtent([0.15,4]).on("zoom", e => mG.attr("transform",e.transform));
+        mSvg.call(mZoom);
 
         // Arrow marker
         const mDefs = mSvg.append("defs");
@@ -2071,12 +2171,21 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
             .data(projectMapGraph.links).enter().append("line")
             .attr("class","arch-link").attr("marker-end","url(#arrow)");
 
+        // Combo: colour/size structure nodes by failure heat; hot files (3+
+        // failed attempts) get a red dashed ring — judgment painted on structure.
+        const mHeatFill = d => d.type==='folder' ? 'var(--accent)'
+            : ((d.failure_count||0)>=3 ? '#E8593B' : ((d.failure_count||0)>=1 ? '#E8A33B' : 'var(--primary)'));
+        const mHeatR = d => d.type==='folder' ? 12 : 7 + Math.min(d.failure_count||0, 5);
+        const mHot = mG.append("g").selectAll("circle")
+            .data(projectMapGraph.nodes.filter(d => (d.failure_count||0) >= 3)).enter().append("circle")
+            .attr("fill","none").attr("stroke","#E8593B").attr("stroke-width",2.5)
+            .attr("stroke-dasharray","3 3").attr("r", d => mHeatR(d)+5);
         const mNode = mG.append("g").selectAll("circle")
             .data(projectMapGraph.nodes).enter().append("circle")
             .attr("class","arch-node")
-            .attr("r", d=>d.type==='folder'?12:7)
-            .attr("fill", d=>d.type==='folder'?'var(--accent)':'var(--primary)')
-            .attr("stroke", d=>d.type==='folder'?'var(--accent)':'var(--primary)')
+            .attr("r", mHeatR)
+            .attr("fill", mHeatFill)
+            .attr("stroke", d => d.type==='folder' ? 'var(--accent)' : ((d.failure_count||0)>0 ? mHeatFill(d) : 'var(--primary)'))
             .attr("stroke-width", d=>d.type==='folder'?3:1.5)
             .attr("stroke-opacity",0.25)
             .attr("filter","url(#mglow)")
@@ -2096,16 +2205,32 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
         mNode.on("mouseover", (event,d) => {
             const tt = document.getElementById("tooltip");
             tt.style.opacity=1;
-            tt.innerHTML = '<strong>'+d.type.toUpperCase()+'</strong><br/>'+d.full_path;
+            tt.innerHTML = '<strong>'+d.type.toUpperCase()+'</strong><br/>'+d.full_path
+                + ((d.failure_count||0) ? '<br/><span style="color:#E8593B">'+d.failure_count+' failed attempts</span>' : '');
             tt.style.left=(event.pageX+14)+"px";
             tt.style.top=(event.pageY-14)+"px";
         }).on("mouseout", () => { document.getElementById("tooltip").style.opacity=0; });
 
         mSim.on("tick", () => {
             mLink.attr("x1",d=>d.source.x).attr("y1",d=>d.source.y).attr("x2",d=>d.target.x).attr("y2",d=>d.target.y);
+            mHot.attr("cx",d=>d.x).attr("cy",d=>d.y);
             mNode.attr("cx",d=>d.x).attr("cy",d=>d.y);
             mLabels.attr("x",d=>d.x).attr("y",d=>d.y);
         });
+
+        // Fit the whole structure graph into view once the layout settles, so
+        // nodes (incl. the hot files) never spread off-screen.
+        function mFit() {
+            const xs = projectMapGraph.nodes.map(n=>n.x), ys = projectMapGraph.nodes.map(n=>n.y);
+            if (!xs.length) return;
+            const minx=Math.min(...xs), maxx=Math.max(...xs), miny=Math.min(...ys), maxy=Math.max(...ys);
+            const w=(maxx-minx)||1, h=(maxy-miny)||1, pad=64;
+            const k=Math.min((mW-2*pad)/w, (mH-2*pad)/h, 1.5);
+            const tx=(mW-k*(minx+maxx))/2, ty=(mH-k*(miny+maxy))/2;
+            mSvg.transition().duration(450).call(mZoom.transform, d3.zoomIdentity.translate(tx,ty).scale(k));
+        }
+        mSim.on("end", mFit);
+        setTimeout(mFit, 1800);
     }
 
     // ══════════════════════════════════════════
@@ -2218,13 +2343,77 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
 
     // TAB 3c: Project Map — Flow view (layered left-to-right flowchart)
     // Same real data as the Story Map: structure + what happened, flowing into memory.
+    // Directory filter selection persists across re-renders (null = show all).
+    let flowSelectedDirs = null;
+
+    function renderFlowFilter(host, dirNames, counts) {
+        const total = dirNames.reduce((a, d) => a + counts[d], 0);
+        const panel = host.append('div').attr('class', 'flow-filter')
+            .style('position', 'absolute').style('left', '12px').style('top', '54px').style('z-index', '6')
+            .style('background', 'var(--surface)').style('border', '1px solid var(--border-light)')
+            .style('border-radius', '10px').style('padding', '8px 10px').style('max-height', 'calc(100% - 70px)')
+            .style('overflow-y', 'auto').style('box-shadow', '0 4px 16px rgba(20,35,58,0.10)')
+            .style('font-size', '11px').style('min-width', '148px');
+        panel.append('div').text('DIRECTORIES')
+            .style('font-size', '9.5px').style('font-weight', '700').style('letter-spacing', '0.8px')
+            .style('color', 'var(--text-muted)').style('margin-bottom', '5px');
+        const mkRow = (label, count, on, onToggle, onSolo, bold) => {
+            const row = panel.append('div').attr('class', 'ff-row')
+                .style('display', 'flex').style('align-items', 'center').style('gap', '7px')
+                .style('padding', '3px 4px').style('cursor', 'pointer').style('border-radius', '5px');
+            row.append('span')
+                .style('width', '13px').style('height', '13px').style('border-radius', '3px').style('flex', '0 0 auto')
+                .style('border', '1.5px solid ' + (on ? 'var(--accent, #1F6FEB)' : 'var(--border-light)'))
+                .style('background', on ? 'var(--accent, #1F6FEB)' : 'transparent')
+                .style('color', '#fff').style('font-size', '10px').style('text-align', 'center').style('line-height', '13px')
+                .text(on ? '✓' : '');
+            const lab = row.append('span').style('flex', '1').style('color', 'var(--text)')
+                .style('font-weight', bold ? '700' : '500').text(label);
+            if (count != null) row.append('span').style('color', 'var(--text-dim)').text(count);
+            row.on('click', onToggle);
+            if (onSolo) lab.style('text-decoration-line', 'underline').style('text-decoration-style', 'dotted')
+                .style('text-underline-offset', '2px').on('click', ev => { ev.stopPropagation(); onSolo(); });
+            return row;
+        };
+        const allOn = flowSelectedDirs.size === dirNames.length;
+        mkRow('All', total, allOn, () => { flowSelectedDirs = allOn ? new Set() : new Set(dirNames); renderMapFlow(); }, null, true);
+        dirNames.forEach(d => {
+            const on = flowSelectedDirs.has(d);
+            mkRow(d.length > 18 ? '…' + d.slice(-17) : d, counts[d], on,
+                () => { on ? flowSelectedDirs.delete(d) : flowSelectedDirs.add(d); renderMapFlow(); },
+                () => { flowSelectedDirs = new Set([d]); renderMapFlow(); });
+        });
+        panel.append('div').text('box = toggle · name = only')
+            .style('font-size', '9px').style('color', 'var(--text-dim)').style('margin-top', '5px');
+    }
+
     function renderMapFlow() {
         const host = d3.select('#map-flow');
         host.selectAll('*').remove();
-        const fileNodes = data.nodes.filter(n => n.type === 'file');
+        // Skip dependency / build noise so the flow shows YOUR code, not site-packages.
+        const FLOW_IGNORE = /(^|\\/)(__pycache__|node_modules|\\.venv|venv|site-packages|dist-info|\\.egg-info|\\.git|build|dist)(\\/|$)|\\.(pyc|pyo)$|\\.cpython-/;
+        const allFileNodes = data.nodes.filter(n => n.type === 'file');
+        const srcFiles = allFileNodes.filter(n => !FLOW_IGNORE.test(n.path || n.id));
+        const hiddenCount = allFileNodes.length - srcFiles.length;
+        const dirOf = f => { const p = (f.path || f.id).split('/'); return p.length > 1 ? p.slice(0, -1).join('/') + '/' : '(root)'; };
+        const allDirCounts = {};
+        srcFiles.forEach(f => { const d = dirOf(f); allDirCounts[d] = (allDirCounts[d] || 0) + 1; });
+        const allDirNames = Object.keys(allDirCounts).sort();
+        // init / reconcile the persistent directory selection
+        if (flowSelectedDirs === null) flowSelectedDirs = new Set(allDirNames);
+        [...flowSelectedDirs].forEach(d => { if (!allDirCounts[d]) flowSelectedDirs.delete(d); });
+        // filter panel (only when there's more than one directory to choose between)
+        if (allDirNames.length > 1) renderFlowFilter(host, allDirNames, allDirCounts);
+        // apply the directory filter, then rank by activity and cap the long tail
+        let visFiles = srcFiles.filter(f => flowSelectedDirs.has(dirOf(f)));
+        visFiles.sort((a, b) => ((b.failure_count||0)*100 + (b.event_count||0)) - ((a.failure_count||0)*100 + (a.event_count||0)));
+        const FLOW_CAP = 40;
+        const cappedCount = Math.max(0, visFiles.length - FLOW_CAP);
+        let fileNodes = cappedCount > 0 ? visFiles.slice(0, FLOW_CAP) : visFiles;
         if (!fileNodes.length) {
             host.append('div').attr('class', 'flow-empty')
-                .text('No file activity yet — log an issue or attempt against a file to see the flow.');
+                .text(srcFiles.length ? 'All directories hidden — enable one in the filter (top-left).'
+                                      : 'No file activity yet — log an issue or attempt against a file to see the flow.');
             return;
         }
         // per-file activity chips from the events connected to each file
@@ -2242,31 +2431,52 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
             else if (ev.event_type === 'decision') chipStats[fid].decisions++;
             else if (ev.event_type === 'note') chipStats[fid].notes++;
         });
-        // group files by parent directory
+        // group the visible files by parent directory
         const dirs = {};
-        fileNodes.forEach(f => {
-            const parts = (f.path || f.id).split('/');
-            const d = parts.length > 1 ? parts.slice(0, -1).join('/') + '/' : '(root)';
-            (dirs[d] = dirs[d] || []).push(f);
-        });
+        fileNodes.forEach(f => { const d = dirOf(f); (dirs[d] = dirs[d] || []).push(f); });
         const dirNames = Object.keys(dirs).sort();
         const rowH = 62, dirX = 200, fileX = 400, actX = 620, memX = 830, WIDTH = 1010;
         const HEIGHT = Math.max(420, fileNodes.length * rowH + 130);
         const paneW = host.node().clientWidth || 800, paneH = host.node().clientHeight || 600;
-        const outer = host.append('svg').attr('width', paneW).attr('height', paneH)
-            .style('cursor', 'grab');
+        // "showing N of M" note (floating pill, centered)
+        if (hiddenCount || cappedCount) {
+            const parts = [];
+            if (cappedCount) parts.push('showing top ' + fileNodes.length + ' of ' + (fileNodes.length + cappedCount) + ' files');
+            if (hiddenCount) parts.push(hiddenCount + ' dependency/build file' + (hiddenCount > 1 ? 's' : '') + ' hidden');
+            host.append('div').attr('class', 'flow-note')
+                .style('position', 'absolute').style('right', '12px').style('top', '54px')
+                .style('z-index', '4')
+                .style('padding', '4px 12px').style('font-size', '11px').style('font-weight', '600')
+                .style('color', 'var(--text-muted)').style('background', 'var(--surface)')
+                .style('border', '1px solid var(--border-light)').style('border-radius', '20px')
+                .text(parts.join('  ·  ') + (cappedCount ? '  (ranked by activity)' : ''));
+        }
+        // Open at a width-fit (top-anchored), then zoom/pan takes over:
+        // wheel = zoom to cursor, drag = pan. Fixes the old fit-to-both ribbon AND
+        // restores interactive zoom.
+        const fitK = Math.min(paneW / (WIDTH + 40), 1);
+        const outer = host.append('svg').attr('width', paneW).attr('height', paneH).style('cursor', 'grab');
         outer.append('defs').append('marker').attr('id', 'flowarr').attr('viewBox', '0 0 10 10')
             .attr('refX', 9).attr('refY', 5).attr('markerWidth', 7).attr('markerHeight', 7).attr('orient', 'auto')
             .append('path').attr('d', 'M0,0 L10,5 L0,10 z').attr('fill', '#8FA8C8');
-        const svg = outer.append('g');   // zoom/pan container — draw everything in here
-        const flowZoom = d3.zoom().scaleExtent([0.3, 3])
-            .on('zoom', ev => svg.attr('transform', ev.transform));
+        const svg = outer.append('g');
+        const flowZoom = d3.zoom().scaleExtent([0.2, 4]).on('zoom', ev => svg.attr('transform', ev.transform));
         outer.call(flowZoom).on('dblclick.zoom', null);
-        // auto-fit the chart to the visible pane
-        const fitK = Math.min(paneW / (WIDTH + 40), paneH / (HEIGHT + 40), 1);
-        outer.call(flowZoom.transform, d3.zoomIdentity
-            .translate(Math.max(8, (paneW - WIDTH * fitK) / 2), Math.max(8, (paneH - HEIGHT * fitK) / 2))
-            .scale(fitK));
+        const initT = d3.zoomIdentity.translate(Math.max(8, (paneW - WIDTH * fitK) / 2), 20).scale(fitK);
+        outer.call(flowZoom.transform, initT);
+        // zoom controls (bottom-right)
+        const zc = host.append('div').attr('class', 'flow-zoom')
+            .style('position', 'absolute').style('right', '12px').style('bottom', '12px').style('z-index', '4')
+            .style('display', 'flex').style('gap', '4px');
+        const zbtn = (label, wide, fn) => zc.append('button').text(label)
+            .style('height', '30px').style('min-width', '30px').style('padding', wide ? '0 10px' : '0')
+            .style('border', '1px solid var(--border-light)').style('border-radius', '7px')
+            .style('background', 'var(--surface)').style('color', 'var(--text)')
+            .style('font-size', wide ? '11px' : '15px').style('font-weight', '700')
+            .style('cursor', 'pointer').style('line-height', '1').on('click', fn);
+        zbtn('+', false, () => outer.transition().duration(180).call(flowZoom.scaleBy, 1.3));
+        zbtn('−', false, () => outer.transition().duration(180).call(flowZoom.scaleBy, 1 / 1.3));
+        zbtn('Fit', true, () => outer.transition().duration(180).call(flowZoom.transform, initT));
         const link = (x1, y1, x2, y2, hot) => svg.append('path')
             .attr('fill', 'none').attr('stroke', hot ? '#E8593B' : '#8FA8C8')
             .attr('stroke-width', hot ? 2 : 1.5).attr('marker-end', 'url(#flowarr)')
@@ -2378,6 +2588,15 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
         this.textContent = mapSplit.classList.contains('details-collapsed') ? 'Show details' : 'Hide details';
         if (mapPane.classList.contains('tree-mode')) renderTree();
         else if (mapPane.classList.contains('flow-mode')) renderMapFlow();
+    });
+    // Responsive — re-fit the active map view when the window resizes.
+    let mapResizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(mapResizeTimer);
+        mapResizeTimer = setTimeout(() => {
+            if (mapPane.classList.contains('flow-mode')) renderMapFlow();
+            else if (mapPane.classList.contains('tree-mode')) renderTree();
+        }, 160);
     });
     window.addEventListener('resize', () => {
         if (mapPane.classList.contains('tree-mode')) renderTree();

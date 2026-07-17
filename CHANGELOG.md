@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.2.0
+
+**The workspace release: memory grows from one project to your whole machine — and finally meets your code's real structure.** 0.1.6 made a single project's memory something you could watch; 0.2.0 lifts that to every project at once, and closes the gap between *what happened* (memory) and *what the code is* (structure). Still local-first: no central store, no telemetry, no new required dependencies, and the event schema is unchanged — the six core event types (issue, hypothesis, attempt, fix, decision, note) are exactly as before.
+
+### New: `pjm dashboard` — the cross-project global view
+
+One page over every project you've `pjm init`-ed: total issues captured, fixes confirmed, dead-ends prevented, tokens/dollars saved, a grade per project, issues-over-time, and a "needs attention" list. Click any project card to open **that repo's own dashboard**, generated fresh from its current files, with a "← All projects" link back.
+
+Crucially this is a global **view, not a global store.** Nothing is centralized — the dashboard aggregates each repo's own `.projectmem/` at read time and never copies memory out of its folder. A tiny registry at `~/.projectmem/projects.json` just records *where* your projects are (override with `$PROJECTMEM_HOME`).
+
+- **Default is serverless** — `pjm dashboard` writes a self-contained static snapshot and opens it. Re-run to refresh. The page labels itself a *snapshot* so it never overclaims.
+- **`--serve` is live** — `pjm dashboard --serve` runs a tiny, ephemeral local HTTP server: the Refresh button re-reads your files, and each project card renders on demand from its latest state. No background daemon — it exists only while the command runs, and **Ctrl+C** (or `kill`) stops it cleanly. `--port` to choose the port.
+
+### New: code structure & relations — `pjm map --build`
+
+Memory knew your *history*; now projectmem also reads your *structure*. `pjm map --build` (run automatically after `pjm init`) walks the codebase and, for Python, resolves imports into a real dependency graph, written to a **derived, gitignored** `.projectmem/structure.json` cache — code is only ever read, never modified. The Project Map's **Graph** and **Flow** views now render actual files and the import edges between them, not just files that happen to appear in the event log.
+
+### New: failure heat on the structure graph (the combo)
+
+The one view neither a pure code-grapher nor a pure memory tool can draw: real structure with real judgment on top. Files with repeated failed attempts in your event log glow red — with a dashed ring past a threshold — laid directly over the structure/import graph, and hovering shows the failed attempts. Structure comes from the code, heat comes from memory, and they meet only in the renderer.
+
+### New: `plan.md` — an editable intent file, separate from memory
+
+A new `.projectmem/plan.md` scaffolded at init: **ideas and plans — what you *mean* to do**, with Ideas / Active plans / Next / Someday / Shipped sections. It is deliberately **not** the event log: `events.jsonl → summary.md` records what *happened*; `plan.md` records what you *intend*. The AI reads it at session start and edits it directly (like `PROJECT_MAP.md`); a plan never becomes an event. `pjm plan` prints it, `pjm plan "idea"` appends one, and the MCP `get_plan()` tool exposes it. Committed (not gitignored) so intent is shared with the team.
+
+### Also
+
+- New tests cover the registry, the global dashboard (static + `--serve`), the structure extractor, and the plan.md feature (135 total).
+- The structure cache (`structure.json`) is added to the consumer `.gitignore` automatically — it is derived from code and never needs committing.
+
 ## 0.1.6
 
 **The visualization release: your project's memory is now something you can watch — and share.** The dashboard grows from four tabs to six, every new view is rendered from the same real event log, and nothing new is required: zero new dependencies, no schema changes, no CLI changes. Includes the Story Map readability controls contributed by @hanley-development (#7, which also folds in #6 — thanks!).

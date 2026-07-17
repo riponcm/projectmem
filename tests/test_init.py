@@ -41,7 +41,8 @@ def test_init_creates_projectmem_files(tmp_path, monkeypatch):
     assert "pjm attempt" in instructions
     assert "record_attempt" in instructions
     assert "Status: not created yet" in project_map
-    assert "Suggested shape" in project_map
+    assert "## Structure" in project_map
+    assert "## Relationships" in project_map
 
 
 def test_instructions_command_prints_ai_protocol(tmp_path, monkeypatch):

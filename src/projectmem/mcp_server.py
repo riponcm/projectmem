@@ -44,6 +44,7 @@ from projectmem.storage import (
     ai_instructions_path,
     discover_mem_dir,
     project_map_path,
+    plan_path,
     read_events,
     summary_path,
 )
@@ -229,6 +230,24 @@ def get_project_map() -> str:
     if path.exists():
         return path.read_text(encoding="utf-8")
     return "No project map found."
+
+
+@mcp.tool()
+@safe_tool
+def get_plan() -> str:
+    """Read plan.md — the project's INTENT file (ideas + plans).
+
+    Call this at session start alongside get_summary(). plan.md records what
+    the team MEANS to do (ideas, active plans, next steps) — distinct from
+    the event log, which records what HAPPENED. When the user shares an idea
+    or a plan, edit plan.md directly (add a bullet, check items off, move
+    done work to Shipped); do NOT log plans as events.
+
+    Read-only. Returns 'No plan found.' if plan.md hasn't been initialized."""
+    path = plan_path()
+    if path.exists():
+        return path.read_text(encoding="utf-8")
+    return "No plan found."
 
 
 @mcp.tool()
