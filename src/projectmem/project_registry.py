@@ -8,7 +8,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 
 BrainName = Literal["coding", "personal"]
@@ -16,6 +16,9 @@ BrainName = Literal["coding", "personal"]
 _IDENTIFIER_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _TAG_RE = _IDENTIFIER_RE
 _TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+_TIMESTAMP_RE = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z"
+)
 _TOP_LEVEL_FIELDS = {"schema_version", "active_project", "projects"}
 _PROJECT_FIELDS = {
     "id",
@@ -102,6 +105,10 @@ def _path_key(path: str | Path) -> str:
 def _parse_timestamp(value: object, field_name: str) -> str:
     if not isinstance(value, str):
         raise _validation_error(f"{field_name} must be an RFC 3339 string")
+    if not _TIMESTAMP_RE.fullmatch(value):
+        raise _validation_error(
+            f"{field_name} must use UTC RFC 3339 seconds ending in Z"
+        )
     try:
         datetime.strptime(value, _TIMESTAMP_FORMAT)
     except ValueError as exc:
@@ -137,7 +144,12 @@ def _parse_record(value: object, index: int) -> ProjectRecord:
     path = Path(path_value).expanduser()
     if not path.is_absolute():
         raise _validation_error(f"projects[{index}].path must be absolute")
-    path = path.resolve()
+    resolved_path = path.resolve()
+    if path_value != str(resolved_path):
+        raise _validation_error(
+            f"projects[{index}].path must be an absolute resolved path"
+        )
+    path = resolved_path
 
     brain = value["default_brain"]
     if brain not in ("coding", "personal"):
@@ -191,6 +203,11 @@ def _validate_uniqueness(projects: Iterable[ProjectRecord]) -> None:
 def _registry_from_payload(payload: object) -> Registry:
     if not isinstance(payload, dict):
         raise _validation_error("top level must be an object")
+    missing = _TOP_LEVEL_FIELDS - set(payload)
+    if missing:
+        raise _validation_error(
+            f"top level is missing fields: {', '.join(sorted(missing))}"
+        )
     if payload.get("schema_version") != 1 or type(
         payload.get("schema_version")
     ) is not int:
@@ -277,6 +294,10 @@ def load_registry(path: Path | None = None) -> Registry:
         return Registry(schema_version=1, active_project=None, projects=())
     try:
         payload = json.loads(destination.read_text(encoding="utf-8"))
+    except UnicodeDecodeError as exc:
+        raise _validation_error(
+            f"{destination} must contain valid UTF-8"
+        ) from exc
     except json.JSONDecodeError as exc:
         raise _validation_error(
             f"{destination} contains malformed JSON"
@@ -430,21 +451,46 @@ def register_project(
     return record
 
 
+def _normalize_project_filters(
+    *,
+    brain: str | None = None,
+    tags: Iterable[str] = (),
+) -> tuple[BrainName | None, frozenset[str]]:
+    if brain not in (None, "coding", "personal"):
+        raise RegistryValidationError("brain must be coding or personal")
+    return cast(BrainName | None, brain), frozenset(
+        _normalize_tag(tag) for tag in tags
+    )
+
+
+def _filter_projects(
+    registry: Registry,
+    *,
+    brain: BrainName | None,
+    required_tags: frozenset[str],
+) -> tuple[ProjectRecord, ...]:
+    return tuple(
+        record
+        for record in registry.projects
+        if (brain is None or record.default_brain == brain)
+        and required_tags.issubset(record.tags)
+    )
+
+
 def list_projects(
     *,
     brain: BrainName | None = None,
     tags: Iterable[str] = (),
     registry_file: Path | None = None,
 ) -> tuple[ProjectRecord, ...]:
-    if brain not in (None, "coding", "personal"):
-        raise RegistryValidationError("brain must be coding or personal")
-    required_tags = {_normalize_tag(tag) for tag in tags}
-    registry = load_registry(registry_file)
-    return tuple(
-        record
-        for record in registry.projects
-        if (brain is None or record.default_brain == brain)
-        and required_tags.issubset(record.tags)
+    normalized_brain, required_tags = _normalize_project_filters(
+        brain=brain,
+        tags=tags,
+    )
+    return _filter_projects(
+        load_registry(registry_file),
+        brain=normalized_brain,
+        required_tags=required_tags,
     )
 
 

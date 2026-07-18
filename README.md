@@ -387,8 +387,10 @@ All 15 tools your AI can call:
 
 ### Project registry
 
-The optional project registry tracks initialized repositories, their active
-selection, brain, and explicit tags. It is stored at
+The optional project registry tracks registered project directories, their
+active selection, brain, and explicit tags. Registration normally requires an
+initialized `.projectmem/` directory; use `--allow-uninitialized` to register
+an existing directory before initialization. The registry is stored at
 PROJECTMEM_HOME/projects.json, or ~/.projectmem/projects.json when
 PROJECTMEM_HOME is unset. The file contains local absolute filesystem paths and
 is never uploaded by projectmem.

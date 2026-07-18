@@ -22,7 +22,10 @@ projectmem is open source and we'd rather be transparent about the trade-offs th
 | `.projectmem/summary.md` | Distilled briefing for AI agents | Committed to git |
 | `.projectmem/PROJECT_MAP.md` | Architecture map | Committed to git |
 | `~/.projectmem/global/` | Cross-project patterns and gotchas | Local only, shared across all your projects |
+| `$PROJECTMEM_HOME/projects.json` (default: `~/.projectmem/projects.json`) | Registered project IDs, aliases, absolute local paths, brains, tags, and active selection | Local only |
 | `.projectmem/watch.pid` · `watch.log` | Watcher state and runtime log | Gitignored, local only |
+
+The project registry contains local filesystem paths. It remains on your machine; projectmem adds no telemetry or network transfer for registry data.
 
 ### Honest trade-offs
 

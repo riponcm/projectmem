@@ -9,9 +9,11 @@ import typer
 from projectmem.project_registry import (
     ProjectRecord,
     ProjectRegistryError,
+    _filter_projects,
+    _normalize_project_filters,
+    _required_project,
     add_project_tag,
     detect_project,
-    list_projects,
     load_registry,
     register_project,
     remove_project,
@@ -19,6 +21,7 @@ from projectmem.project_registry import (
     set_active_project,
     set_project_brain,
 )
+from projectmem.storage import discover_mem_dir
 
 
 project_app = typer.Typer(
@@ -52,6 +55,12 @@ def _render_record(record: ProjectRecord) -> str:
     )
 
 
+def _find_initialized_root(path: Path) -> Path | None:
+    candidate = path.parent if path.is_file() else path
+    mem_dir = discover_mem_dir(candidate)
+    return mem_dir.parent if mem_dir is not None else None
+
+
 @project_app.command("register")
 def register_command(
     path: Path,
@@ -78,12 +87,18 @@ def list_command(
     brain: str | None = typer.Option(None, "--brain"),
     tags: list[str] | None = typer.Option(None, "--tag"),
 ) -> None:
-    records = _domain_call(
-        list_projects,
+    normalized_brain, required_tags = _domain_call(
+        _normalize_project_filters,
         brain=brain,
         tags=tags or (),
     )
     registry = _domain_call(load_registry)
+    records = _domain_call(
+        _filter_projects,
+        registry,
+        brain=normalized_brain,
+        required_tags=required_tags,
+    )
     typer.echo("ACTIVE  ALIAS  BRAIN  TAGS  PATH")
     for record in records:
         active = "*" if registry.active_project == record.id else ""
@@ -104,7 +119,15 @@ def detect_command(
     resolved = expanded.resolve()
     record = _domain_call(detect_project, resolved, _domain_call(load_registry))
     if record is None:
-        typer.echo(f'pjm project register "{resolved}"', err=True)
+        project_root = _find_initialized_root(resolved)
+        if project_root is None:
+            typer.echo(
+                f"Project is not initialized: {resolved}. "
+                "Run pjm init from the project root.",
+                err=True,
+            )
+            raise typer.Exit(1)
+        typer.echo(f'pjm project register "{project_root}"', err=True)
         raise typer.Exit(1)
     typer.echo(_render_record(record))
 
@@ -142,11 +165,6 @@ def tag_remove_command(identifier: str, tag: str) -> None:
 @tag_app.command("list")
 def tag_list_command(identifier: str) -> None:
     registry = _domain_call(load_registry)
-    from projectmem.project_registry import find_project
-
-    record = find_project(identifier, registry)
-    if record is None:
-        typer.echo(f"Project is not registered: {identifier}", err=True)
-        raise typer.Exit(1)
+    record = _domain_call(_required_project, identifier, registry)
     for tag in record.tags:
         typer.echo(tag)
