@@ -227,3 +227,11 @@ def test_mcp_stdio_add_note_returns_and_writes_event(
         encoding="utf-8"
     )
     assert "MCP smoke note from pytest" in events_text
+
+
+def test_mcp_server_instantiation():
+    from projectmem.mcp_server import mcp
+
+    assert mcp is not None
+    assert mcp.name == "projectmem"
+

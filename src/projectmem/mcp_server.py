@@ -36,7 +36,10 @@ import sys
 from pathlib import Path
 from typing import Annotated, Callable, Optional
 
-from mcp.server.fastmcp import FastMCP
+try:
+    from mcp.server.fastmcp import FastMCP
+except (ImportError, ModuleNotFoundError):
+    from mcp.server.mcpserver import MCPServer as FastMCP
 from pydantic import Field
 
 from projectmem.commands import attempt, decision, fix, log, note
