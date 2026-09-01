@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "projectmem"
-version = "0.3.0"
+version = "0.3.1"
 description = "Coding agent memory — local-first memory and judgment for AI coding agents. One MCP server for every project; warns before repeating failed fixes."
 authors = [{ name = "Ripon Chandra Malo" }]
 readme = "README.md"

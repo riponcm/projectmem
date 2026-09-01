@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.3.1
+
+**Know when there is something to upgrade to — without giving up the promise.** projectmem says it makes no network calls, and that is a reason people choose it. So update checking is opt-in everywhere, and nothing about your machine is ever sent: the request is a plain GET of the same public JSON file `pip install` reads.
+
+### In the dashboards
+
+Both `pjm visualize` and `pjm dashboard` now show which version generated the page — the project dashboard in the sidebar under the star button, the global one in the footer. Beside it is a **check for updates** link. The page makes no request until you click it, and the result is one of *up to date*, *X available ↗* (linking to PyPI), or *could not reach PyPI*, which changes nothing else on the page.
+
+### On the command line
+
+```bash
+pjm doctor            # shows your version and how to check
+pjm doctor --online   # one-off check
+pjm doctor --auto     # remember to check, at most once a day
+```
+
+`--auto` is off by default and can be turned off again with `--no-auto`. When on, the result is cached, so an enabled check costs one request a day.
+
+### Fixed
+
+Version comparison stripped every non-digit, which turned `1.0.0rc1` into `(1,0,1)` and sorted a release candidate *above* the final release — someone on `1.0.0` would have been told to upgrade to `1.0.0rc1`. Leading digits only now.
+
 ## 0.3.0
 
 **One server, many projects.** Until now an MCP config was tied to one repository: eleven projects meant eleven server entries and eleven restarts. 0.3.0 serves every registered project from a single server — paste the config once, and every repo you `pjm init` afterwards is reachable from it. Still local-first: no central store, no telemetry, no cross-project memory retrieval. The event schema is unchanged.

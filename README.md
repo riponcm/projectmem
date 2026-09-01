@@ -153,7 +153,7 @@ cd your-project && pjm init
 | Doc | What's in it |
 |---|---|
 | **[TUTORIAL.md](TUTORIAL.md)** | 15-minute step-by-step walkthrough — set up projectmem on your own project, watch the lifecycle, see the pre-commit warning fire. |
-| **[CHANGELOG.md](CHANGELOG.md)** | Release history. Latest: v0.3.0 — one server, many projects: global MCP mode, the project registry, and a rebuilt dashboard. |
+| **[CHANGELOG.md](CHANGELOG.md)** | Release history. Latest: v0.3.1 — opt-in update checks, on top of 0.3.0's global MCP mode, project registry and rebuilt dashboard. |
 | **[Research paper (arXiv:2606.12329)](https://arxiv.org/abs/2606.12329)** | *PROJECTMEM: A Local-First, Event-Sourced Memory and Judgment Layer for AI Coding Agents* — the peer-readable version: design, Memory-as-Governance framing, capability comparison, and the 207-event dogfooding study. |
 | **[LICENSE](LICENSE)** | MIT |
 
@@ -182,6 +182,14 @@ That's it. `pjm init` installs three git hooks (pre-commit warnings, post-commit
 > The canonical command is `projectmem`. A `pjm` alias is installed for speed.
 
 ---
+
+## ✨ New in 0.3.1 — know when to upgrade
+
+Both dashboards now show which version generated the page, with a **check for
+updates** link beside it. The page makes no request until you click — PyPI's
+public JSON is fetched straight from your browser and nothing about your machine
+is sent. On the command line, `pjm doctor --online` checks once and
+`pjm doctor --auto` remembers to check daily; both are off unless you ask.
 
 ## ✨ New in 0.3.0 — one server, many projects
 
@@ -309,7 +317,7 @@ Your project's memory is also something you can *watch* — and share.
 
 ## 🚧 Upcoming
 
-- **Import your existing memory** — `pjm import` *(planned for 0.3.1)* will migrate history from **mem0**, **agentmemory**, **Letta**, and Claude session logs into projectmem. It maps only to the core event vocabulary — issues, attempts, fixes, decisions, notes — so signal comes in and another tool's clutter stays out. Your judgment history moves with you.
+- **Import your existing memory** — `pjm import` *(planned for 0.3.3)* will migrate history from **mem0**, **agentmemory**, **Letta**, and Claude session logs into projectmem. It maps only to the core event vocabulary — issues, attempts, fixes, decisions, notes — so signal comes in and another tool's clutter stays out. Your judgment history moves with you.
 
 Want a source supported? [Open an issue](https://github.com/riponcm/projectmem/issues) and tell us what you're migrating from.
 
