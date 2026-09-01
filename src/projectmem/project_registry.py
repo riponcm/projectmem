@@ -133,96 +133,96 @@ def _record_from_payload(payload: dict[str, Any]) -> ProjectRecord | None:
     )
 
 
-def _migrate_legacy(paths: list[str]) -> Registry:
-    """v0.2.0's plain list of paths -> schema v1 records.
+def meta_path(path: Path | None = None) -> Path:
+    """Sidecar holding everything the legacy format cannot express."""
+    return (path or registry_path()).with_name("projects.meta.json")
 
-    Order is preserved so `pjm dashboard` keeps its card order. The old format
-    carried no timestamps, so migration time is the honest answer for both.
 
-    Entries that are not absolute paths are dropped. That is not paranoia: a
-    0.2.x `register_project()` run against a v1 file iterates the dict, gets its
-    KEYS, and writes them back as a list — so a mixed-version machine produces
-    ["schema_version", "active_project", "projects", "/real/path"]. Migrating
-    that verbatim turns registry keys into projects.
-    """
-    stamp = _now()
-    taken: set[str] = set()
-    records = []
-    for raw in paths:
-        # is_absolute(), not startswith("/") — a Windows registry holds
-        # "C:\\Users\\..." and a UNC share holds "\\\\server\\share", neither of
-        # which starts with a slash. Testing for one would have dropped every
-        # entry a Windows user had.
-        if not isinstance(raw, str) or not Path(raw).is_absolute():
-            continue
-        path = Path(raw)
-        ident = _unique_id(slugify(path.name), taken)
-        taken.add(ident)
-        records.append(
-            ProjectRecord(id=ident, path=path, created_at=stamp, updated_at=stamp)
-        )
-    return Registry(projects=tuple(records))
+def _read_json(file: Path):
+    try:
+        return json.loads(file.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return None
 
 
 def load_registry(path: Path | None = None) -> Registry:
-    """Read the registry, migrating the legacy list format on the way.
+    """Read the registry.
 
-    Never raises for a damaged file: a registry that cannot be parsed reads as
-    empty, because failing here would break `pjm init` for everyone.
+    `projects.json` stays a plain list of paths — the exact format 0.2.x reads
+    and writes — and a sidecar holds ids, aliases, tags and the active project.
+    That split is deliberate: an older projectmem sharing the machine can only
+    ever append a path to a list it understands. When the registry was a dict,
+    0.2.x's `[p for p in data if isinstance(p, str)]` iterated its KEYS and
+    wrote them back as the whole registry, destroying every real entry. The
+    format now makes that impossible rather than merely detectable.
+
+    Never raises: an unreadable registry reads as empty, because failing here
+    would break `pjm init` for everyone.
     """
     file = path or registry_path()
-    try:
-        payload = json.loads(file.read_text(encoding="utf-8-sig"))
-    except (OSError, json.JSONDecodeError):
-        return Registry()
+    payload = _read_json(file)
+    meta = _read_json(meta_path(file)) or {}
+    if not isinstance(meta, dict):
+        meta = {}
 
-    if isinstance(payload, list):  # v0.2.0
-        clobbered = {"schema_version", "active_project", "projects"} <= set(
-            e for e in payload if isinstance(e, str)
-        )
-        migrated = _migrate_legacy(payload)
-        _backup(file)
-        save_registry(migrated, file)
-        if clobbered:
-            # Fingerprint of an older projectmem having overwritten a v1
-            # registry with its own list format. Say so — the alternative is a
-            # user silently losing projects from their dashboard.
-            import sys
-
-            print(
-                "projectmem: an older version of projectmem rewrote "
-                f"{file} and some projects were lost.\n"
-                "  Re-add them with `pjm project register <path>`, and upgrade "
-                "any other environment\n"
-                "  that still has projectmem < 0.3.0 installed.",
-                file=sys.stderr,
-            )
-        return migrated
-
-    if not isinstance(payload, dict):
-        return Registry()
-
-    raw_projects = payload.get("projects")
-    records = []
-    if isinstance(raw_projects, list):
-        for item in raw_projects:
+    if isinstance(payload, dict):
+        # 0.3.0 development builds wrote records inline. Convert once, then the
+        # file goes back to being a list.
+        records = []
+        for item in payload.get("projects") or []:
             if isinstance(item, dict):
                 record = _record_from_payload(item)
                 if record is not None:
                     records.append(record)
-    known = {"schema_version", "active_project", "projects"}
-    return Registry(
-        schema_version=int(payload.get("schema_version") or SCHEMA_VERSION),
-        active_project=payload.get("active_project") or None,
+        registry = Registry(
+            active_project=payload.get("active_project") or None,
+            projects=tuple(records),
+        )
+        _backup(file)
+        save_registry(registry, file)
+        return registry
+
+    paths = [p for p in (payload or []) if isinstance(p, str) and Path(p).is_absolute()]
+    by_path = meta.get("by_path") if isinstance(meta.get("by_path"), dict) else {}
+    stamp = _now()
+    taken: set[str] = set()
+    records = []
+    dirty = False
+    for raw in paths:
+        entry = by_path.get(raw) if isinstance(by_path.get(raw), dict) else {}
+        ident = entry.get("id")
+        if not isinstance(ident, str) or ident in taken:
+            ident = _unique_id(slugify(Path(raw).name), taken)
+            dirty = True  # a path an older projectmem appended; give it an id
+        taken.add(ident)
+        tags = entry.get("tags")
+        records.append(
+            ProjectRecord(
+                id=ident,
+                path=Path(raw),
+                alias=entry.get("alias") or None,
+                default_brain=entry.get("default_brain") or DEFAULT_BRAIN,
+                tags=tuple(t for t in tags if isinstance(t, str))
+                if isinstance(tags, list)
+                else (),
+                created_at=entry.get("created_at") or stamp,
+                updated_at=entry.get("updated_at") or stamp,
+            )
+        )
+    active = meta.get("active_project")
+    registry = Registry(
+        active_project=active if isinstance(active, str) else None,
         projects=tuple(records),
-        extras={k: v for k, v in payload.items() if k not in known},
     )
+    if dirty:
+        save_registry(registry, file)
+    return registry
 
 
 def _backup(file: Path) -> None:
-    """Keep the FIRST pre-migration copy — it cannot be regenerated.
+    """Keep the FIRST pre-conversion copy — it cannot be regenerated.
 
-    Deliberately does not overwrite an existing backup. A second migration
+    Deliberately does not overwrite an existing backup. A second conversion
     usually means something already went wrong upstream, and replacing a good
     backup with the damaged file is how a recoverable problem becomes a
     permanent one.
@@ -235,30 +235,10 @@ def _backup(file: Path) -> None:
         pass
 
 
-def save_registry(registry: Registry, path: Path | None = None) -> None:
-    """Write the registry atomically — a half-written file loses every project."""
-    file = path or registry_path()
-    payload: dict[str, Any] = dict(registry.extras)
-    payload.update(
-        {
-            "schema_version": SCHEMA_VERSION,
-            "active_project": registry.active_project,
-            "projects": [
-                {
-                    "id": r.id,
-                    "alias": r.alias,
-                    "path": str(r.path),
-                    "default_brain": r.default_brain,
-                    "tags": list(r.tags),
-                    "created_at": r.created_at,
-                    "updated_at": r.updated_at,
-                }
-                for r in registry.projects
-            ],
-        }
-    )
+def _write_atomic(file: Path, payload) -> None:
+    """A half-written registry loses every project, so never write in place."""
     file.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=str(file.parent), prefix=".projects-", suffix=".json")
+    fd, tmp = tempfile.mkstemp(dir=str(file.parent), prefix=".pm-", suffix=".json")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=1)
@@ -267,6 +247,30 @@ def save_registry(registry: Registry, path: Path | None = None) -> None:
     except OSError:
         Path(tmp).unlink(missing_ok=True)
         raise
+
+
+def save_registry(registry: Registry, path: Path | None = None) -> None:
+    """Write the list every version understands, plus our sidecar."""
+    file = path or registry_path()
+    _write_atomic(file, [str(r.path) for r in registry.projects])
+    _write_atomic(
+        meta_path(file),
+        {
+            "schema_version": SCHEMA_VERSION,
+            "active_project": registry.active_project,
+            "by_path": {
+                str(r.path): {
+                    "id": r.id,
+                    "alias": r.alias,
+                    "default_brain": r.default_brain,
+                    "tags": list(r.tags),
+                    "created_at": r.created_at,
+                    "updated_at": r.updated_at,
+                }
+                for r in registry.projects
+            },
+        },
+    )
 
 
 # ── operations ──────────────────────────────────────────────────────────

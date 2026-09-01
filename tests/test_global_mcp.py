@@ -27,7 +27,8 @@ def _project(tmp_path: Path, name: str) -> Path:
 
 # ── registry ────────────────────────────────────────────────────────────
 
-def test_legacy_list_is_migrated_in_place(tmp_path, monkeypatch):
+def test_a_0_2_x_registry_is_read_without_being_rewritten(tmp_path, monkeypatch):
+    """projects.json keeps the format every version understands."""
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("PROJECTMEM_HOME", str(home))
@@ -41,10 +42,12 @@ def test_legacy_list_is_migrated_in_place(tmp_path, monkeypatch):
 
     assert [r.id for r in registry.projects] == ["alpha", "beta"]
     assert [r.path for r in registry.projects] == [alpha, beta]
+    # still a list — an older projectmem can still read and append to it
     payload = json.loads((home / "projects.json").read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 1
-    # the pre-migration file cannot be regenerated, so it is kept
-    assert (home / "projects.json.bak").exists()
+    assert payload == [str(alpha), str(beta)]
+    # ids and aliases live beside it, where an old version cannot reach them
+    meta = json.loads((home / "projects.meta.json").read_text(encoding="utf-8"))
+    assert set(meta["by_path"]) == {str(alpha), str(beta)}
 
 
 def test_dashboard_still_reads_the_registry_after_migration(tmp_path, monkeypatch):
@@ -248,44 +251,67 @@ def test_a_single_registered_project_needs_no_selection(tmp_path, monkeypatch):
         resolve()
 
 
-def test_a_clobbered_registry_does_not_become_projects(tmp_path, monkeypatch, capsys):
-    """0.2.x writing over a v1 registry turns its KEYS into list entries.
+def test_an_older_projectmem_can_only_append_a_path(tmp_path, monkeypatch):
+    """The scenario that used to destroy the registry, replayed exactly.
 
-    `[p for p in data if isinstance(p, str)]` over a dict yields its keys, so a
-    machine running both versions ends up with a registry listing
-    "schema_version" as a project. Those must never become records.
+    0.2.x does `[p for p in data if isinstance(p, str)]` and writes the result
+    back. Against a list that is harmless — every path is kept and one added.
+    Against the dict format it iterated the KEYS and wrote those instead,
+    losing every project. Storing the list is what makes this a non-event.
     """
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("PROJECTMEM_HOME", str(home))
-    real = _project(tmp_path, "alpha")
+    # initialize() registers, so create alpha first and beta only after we have
+    # captured what an old projectmem would see.
+    alpha = _project(tmp_path, "alpha")
+    reg.set_alias("alpha", "a")
+
+    old_view = json.loads((home / "projects.json").read_text(encoding="utf-8"))
+    assert old_view == [str(alpha)]           # it understands the file
+
+    # …now an old projectmem in another environment registers another project
+    beta = tmp_path / "beta"
+    beta.mkdir()
+    from projectmem.storage import initialize
+
+    initialize(beta)
+    old_view = json.loads((home / "projects.json").read_text(encoding="utf-8"))
+    old_view = [p for p in old_view if p != str(beta)] + [str(beta)]
+    (home / "projects.json").write_text(json.dumps(old_view), encoding="utf-8")
+
+    registry = reg.load_registry()
+
+    assert [r.path for r in registry.projects] == [alpha, beta]
+    assert registry.find("a").path == alpha   # our metadata survived intact
+
+
+def test_a_dev_format_registry_is_converted_and_backed_up(tmp_path, monkeypatch):
+    """0.3.0 dev builds wrote records inline; convert them back to a list."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("PROJECTMEM_HOME", str(home))
+    alpha = _project(tmp_path, "alpha")
     (home / "projects.json").write_text(
-        json.dumps(["schema_version", "active_project", "projects", str(real)]),
+        json.dumps(
+            {
+                "schema_version": 1,
+                "active_project": "alpha",
+                "projects": [{"id": "alpha", "path": str(alpha), "alias": "a"}],
+            }
+        ),
         encoding="utf-8",
     )
 
     registry = reg.load_registry()
 
     assert [r.id for r in registry.projects] == ["alpha"]
-    assert "older version of projectmem" in capsys.readouterr().err
-
-
-def test_the_first_backup_is_never_overwritten(tmp_path, monkeypatch):
-    """A second migration must not replace a good backup with a damaged file."""
-    home = tmp_path / "home"
-    home.mkdir()
-    monkeypatch.setenv("PROJECTMEM_HOME", str(home))
-    alpha = _project(tmp_path, "alpha")
-    (home / "projects.json").write_text(json.dumps([str(alpha)]), encoding="utf-8")
-
-    reg.load_registry()
-    original = (home / "projects.json.bak").read_text(encoding="utf-8")
-
-    # something downgrades the file again, with less in it
-    (home / "projects.json").write_text(json.dumps([]), encoding="utf-8")
-    reg.load_registry()
-
-    assert (home / "projects.json.bak").read_text(encoding="utf-8") == original
+    assert registry.active_project == "alpha"
+    assert json.loads((home / "projects.json").read_text(encoding="utf-8")) == [
+        str(alpha)
+    ]
+    # the pre-conversion file cannot be regenerated, so it is kept
+    assert (home / "projects.json.bak").exists()
 
 
 def test_windows_paths_survive_migration(tmp_path, monkeypatch):
@@ -332,7 +358,7 @@ def test_absolute_check_is_used_rather_than_a_slash_test():
 
     code = "\n".join(
         line.split("#", 1)[0]
-        for line in inspect.getsource(project_registry._migrate_legacy).splitlines()
+        for line in inspect.getsource(project_registry.load_registry).splitlines()
     )
     assert "is_absolute()" in code
     assert 'startswith("/")' not in code
