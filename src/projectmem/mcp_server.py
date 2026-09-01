@@ -36,7 +36,14 @@ import sys
 from pathlib import Path
 from typing import Annotated, Callable, Optional
 
-from mcp.server.fastmcp import FastMCP
+# mcp 2.x renamed FastMCP to MCPServer and left `mcp.server.fastmcp` behind as
+# a module that raises on import. We only use the constructor, @tool() and
+# run(), which are identical on both, so a single alias covers the whole SDK
+# range. Reported and fixed by Vivaan Dhawan (#10).
+try:
+    from mcp.server.fastmcp import FastMCP
+except ImportError:  # mcp >= 2.0
+    from mcp.server.mcpserver import MCPServer as FastMCP
 from pydantic import Field
 
 from projectmem.commands import attempt, decision, fix, log, note
