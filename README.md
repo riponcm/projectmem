@@ -3,6 +3,12 @@
 <div align="center">
   <img src="https://raw.githubusercontent.com/projectmem/projectmemdoc/main/logo/projectmem-wordmark-800.png" alt="projectmem" width="420" />
 
+  <p>
+    <a href="https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md"><b>🎉 v0.3.1 is out</b></a> —
+    one MCP server for every project, and a security fix worth upgrading for.
+    <a href="https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md">See what changed →</a>
+  </p>
+
   <p><b>We don't make AI smarter. We make it experienced.</b></p>
   <p><i><b>Coding agent memory</b> — the local-first memory + judgment layer for AI coding agents. One MCP server for every project. Save up to 50%+ of AI tokens. Stop repeating yesterday's bug.</i></p>
 

@@ -10,6 +10,9 @@ a real project, watched the AI agent log a bug → record a failed attempt
 → record the fix, and seen the **pre-commit warning** catch you the next
 time you almost repeat the same mistake.
 
+You configure your AI client **once here, not once per project** — since 0.3.0 a
+single MCP server serves every project you register.
+
 ---
 
 ## What you'll need
@@ -47,33 +50,40 @@ You should see, in order:
    instructs AI clients to call projectmem's MCP tools before reading
    source.
 3. `PROJECT_MAP.md` **pre-populated** from your `pyproject.toml` /
-   `package.json` / `Cargo.toml` / `go.mod` — no manual stack tour
-   needed (new in 0.1.3).
+   `package.json` / `Cargo.toml` / `go.mod` — no manual stack tour needed.
 4. **Git hooks installed** — `pre-commit` for failure warnings,
    `post-commit` and `post-merge` for auto-capture.
-5. A printed **MCP client config block** with your absolute paths
-   already filled in (new in 0.1.3) — copy it.
+5. The project **registered**, so the one MCP server you configure in the
+   next step can reach it.
+6. A printed **MCP client config block** with your absolute Python path
+   already filled in — copy it.
 
 ---
 
-## Step 3 — Wire up your AI client
+## Step 3 — Wire up your AI client (once, not once per project)
 
 Paste the printed config block into your client's MCP config file:
 
 | Client | Config file |
 |---|---|
-| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-| Cursor | `~/.cursor/mcp.json` (per-project) or via Settings → MCP |
+| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` — `%APPDATA%\Claude\` on Windows, `~/.config/Claude/` on Linux |
+| Cursor | `~/.cursor/mcp.json` (global — one entry covers every project) |
 | Antigravity (legacy) | `~/.gemini/antigravity/mcp_config.json` |
-| Codex | `~/.codex/config.toml` (TOML, not JSON) |
+| Codex | `~/.codex/config.toml` (TOML, not JSON — `pjm init` prints both forms) |
+
+The block carries **no `--root` and no `cwd`**. That is what makes one server
+serve every project you have registered; adding either pins it to a single repo.
 
 Then **fully quit and restart the client** (cold start — closing the
 window isn't enough; MCP servers initialize only on launch).
 
-**Verify the connection:** open your client's tools panel. You should
-see **14 projectmem tools**. Hover `search_events` — its `query` and
-`limit` parameters should show descriptions. If they don't, you're not
-on 0.1.3.
+**Verify the connection:** open your client's tools panel. You should see
+**17 projectmem tools**. Ask your AI to `call list_projects` and it will name
+every project this one server can reach.
+
+> **Upgrading from 0.2.x?** Your old `--root` entry still works, but only for the
+> repo it points at — a project you init today is invisible to it. Replace it with
+> the block above, then run `pjm doctor`, which flags any client still pinned.
 
 ---
 
@@ -200,9 +210,15 @@ In about 15 minutes you exercised every part of projectmem:
 
 ## Common gotchas
 
+- **"No project selected"** → the call named no project and none could be
+  inferred. Ask your AI to pass `project="<name>"`, or set a default with
+  `pjm project use <name>`. `pjm doctor` shows what is registered.
+- **A project your AI cannot see** → it was probably never registered (the
+  registry only exists since 0.2.0). `pjm doctor` finds projects with memory
+  that are missing, and `pjm doctor --fix` adds them.
 - **Pre-commit warning doesn't fire** → `.git/hooks/pre-commit` doesn't
-  exist. Run `pjm hooks install`. Under conda/venv, 0.1.3 bakes the
-  absolute pjm path into the hook — confirm with `head .git/hooks/pre-commit`.
+  exist. Run `pjm hooks install`. Under conda/venv the hook bakes in the
+  absolute pjm path — confirm with `head .git/hooks/pre-commit`.
 - **Agent re-reads files instead of using memory** → your client may not
   surface the MCP `instructions=` field strongly. projectmem also writes
   a `CLAUDE.md` rules file at the repo root for exactly this — open
@@ -215,11 +231,17 @@ In about 15 minutes you exercised every part of projectmem:
 
 ## Where to go next
 
+- **Add the projects you already have:** `pjm doctor` finds repos with memory
+  that were never registered — anything from before 0.2.0 — and `--fix` adds
+  them, so one server reaches everything.
 - **Cross-project memory:** lessons learned in one repo can surface in
   others with the same stack (`~/.projectmem/global/`). Try
   `pjm global show` to see what's accumulated across your machine.
+- **See it all at once:** `pjm dashboard` opens every project in one view,
+  starting with where you left off.
 - **Issues + feature requests:** [github.com/riponcm/projectmem/issues](https://github.com/riponcm/projectmem/issues).
 
 ---
 
-*Last updated for projectmem 0.1.3.*
+*Last updated for projectmem 0.3.1 — see the [changelog](CHANGELOG.md) for what
+changed since.*
