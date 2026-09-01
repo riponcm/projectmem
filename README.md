@@ -342,7 +342,7 @@ Strictly speaking this prompt is optional — with the MCP server installed corr
 - **macOS:** Claude menu → `Settings…` → `Developer` tab → **Local MCP servers** → **Edit Config**.
 - **Windows / Linux:** same path expected (`Settings → Developer → Edit Config`) — open an issue if your platform differs and we'll update this.
 
-If you prefer the raw file path: `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, `%APPDATA%\Claude\claude_desktop_config.json` on Windows.
+If you prefer the raw file path: `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, `%APPDATA%\Claude\claude_desktop_config.json` on Windows, `~/.config/Claude/claude_desktop_config.json` on Linux (or `$XDG_CONFIG_HOME/Claude/` if you have moved it). `pjm init` prints the right one for the machine you run it on.
 
 Paste this block:
 

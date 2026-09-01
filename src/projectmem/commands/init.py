@@ -541,15 +541,23 @@ def _client_configs() -> list[tuple[str, Path]]:
     changes HOME (tests, sandboxes) and hides the dependency.
     """
     home = Path.home()
+    xdg = Path(os.environ.get("XDG_CONFIG_HOME") or (home / ".config"))
     return [
+        # macOS
         (
             "Claude Desktop",
             home / "Library/Application Support/Claude/claude_desktop_config.json",
         ),
+        # Windows
         ("Claude Desktop", home / "AppData/Roaming/Claude/claude_desktop_config.json"),
+        # Linux — Claude Desktop has no official build, but the community ones
+        # follow XDG, and $XDG_CONFIG_HOME is frequently moved off ~/.config.
+        ("Claude Desktop", xdg / "Claude/claude_desktop_config.json"),
+        # Same on every platform
         ("Cursor", home / ".cursor/mcp.json"),
         ("Antigravity", home / ".gemini/antigravity/mcp_config.json"),
         ("Codex", home / ".codex/config.toml"),
+        ("Claude Code", home / ".claude.json"),
     ]
 
 
@@ -673,10 +681,20 @@ def _print_mcp_config(root: Path, single_project: bool = False) -> None:
         typer.echo('    args = ["-m", "projectmem.mcp_server"]')
     typer.echo("")
     typer.echo("  Client config file locations:")
-    typer.echo(
-        "    Claude Desktop  ~/Library/Application Support/Claude/"
-        "claude_desktop_config.json"
-    )
+    if sys.platform == "darwin":
+        typer.echo(
+            "    Claude Desktop  ~/Library/Application Support/Claude/"
+            "claude_desktop_config.json"
+        )
+    elif sys.platform.startswith("win"):
+        typer.echo(
+            "    Claude Desktop  %APPDATA%\\Claude\\claude_desktop_config.json"
+        )
+    else:
+        typer.echo(
+            "    Claude Desktop  ~/.config/Claude/claude_desktop_config.json  "
+            "($XDG_CONFIG_HOME)"
+        )
     typer.echo(
         "    Cursor          ~/.cursor/mcp.json  (global; per-project is "
         "<repo>/.cursor/mcp.json)"
@@ -686,6 +704,7 @@ def _print_mcp_config(root: Path, single_project: bool = False) -> None:
         "(legacy IDE; v2 path may differ)"
     )
     typer.echo("    Codex (TOML!)   ~/.codex/config.toml")
+    typer.echo("    Claude Code     claude mcp add  (or ~/.claude.json)")
     typer.echo("")
     typer.echo("  After pasting: fully quit and restart your client (cold start).")
     if not single_project:

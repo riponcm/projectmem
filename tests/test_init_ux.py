@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+from projectmem.commands import init as init_module
 from projectmem.commands.init import (
     _detect_main_folders,
     _extract_entry_points,
@@ -295,3 +296,40 @@ def test_init_prints_the_codex_toml_form(
 
     assert "[mcp_servers.projectmem]" in out
     assert 'args = ["-m", "projectmem.mcp_server"]' in out
+
+
+def test_linux_client_paths_are_scanned_and_xdg_is_honoured(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Linux keeps client config under XDG, which is often moved off ~/.config."""
+    home = tmp_path / "home"
+    xdg = tmp_path / "elsewhere"
+    (xdg / "Claude").mkdir(parents=True)
+    (xdg / "Claude" / "claude_desktop_config.json").write_text(
+        '{"mcpServers":{"projectmem":{"args":["-m","projectmem.mcp_server",'
+        '"--root","/old/repo"]}}}',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
+
+    _print_mcp_config(tmp_path / "myproj")
+    out = capsys.readouterr().out
+
+    assert "still pins projectmem to one repo" in out
+    assert str(xdg / "Claude" / "claude_desktop_config.json") in out
+
+
+def test_printed_locations_match_the_platform(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A Linux user should not be told to look in ~/Library."""
+    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch.setattr(init_module.sys, "platform", "linux")
+
+    _print_mcp_config(tmp_path / "myproj")
+    out = capsys.readouterr().out
+
+    assert "~/.config/Claude/claude_desktop_config.json" in out
+    assert "Library/Application Support" not in out
