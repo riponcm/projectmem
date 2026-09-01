@@ -20,7 +20,7 @@ keywords = [
 ]
 dependencies = [
   "typer>=0.12",
-  "mcp>=0.1.0",
+  "mcp>=1.0,<3",
   "watchdog>=4.0",
 ]
 classifiers = [

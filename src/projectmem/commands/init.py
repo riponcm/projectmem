@@ -19,6 +19,7 @@ def run(
     no_claude_md: bool = False,
     no_stack_detect: bool = False,
     no_mcp_config: bool = False,
+    mcp_config_single: bool = False,
     no_structure: bool = False,
     global_tags: str | None = None,
     root: Path | None = None,
@@ -87,7 +88,7 @@ def run(
     # Print a copy-pasteable MCP client config block — removes the
     # "how do I wire this up?" friction that hits every new user.
     if not no_mcp_config:
-        _print_mcp_config(root_path)
+        _print_mcp_config(root_path, single_project=mcp_config_single)
 
     typer.echo(
         "\n  Next: Start an AI session to refine PROJECT_MAP.md and capture decisions."
@@ -529,26 +530,64 @@ def _detect_main_folders(root: Path) -> list[tuple[str, str]]:
 # absolute Python path baked in to dodge the Claude-Desktop/Cursor PATH
 # gotcha documented in the README) removes a whole class of support questions.
 
-def _print_mcp_config(root: Path) -> None:
-    """Print a copy-pasteable MCP client config block + client-config paths."""
+def _print_mcp_config(root: Path, single_project: bool = False) -> None:
+    """Print a copy-pasteable MCP client config block + client-config paths.
+
+    Since 0.3.0 the default is one server for every registered project: the
+    config carries no --root, and each tool call names its project (or uses the
+    active one). Paste it once and every repo you `pjm init` from then on is
+    served by it. `--mcp-config-single` still prints the pinned form, which
+    stays supported and remains the stricter choice — a pinned server refuses
+    to touch any repo but its own.
+    """
     py = sys.executable  # Absolute path — subprocesses don't inherit shell PATH.
     bar = "═" * 62
     typer.echo("")
     typer.echo(bar)
-    typer.echo("  MCP client configuration — paste this into your client:")
+    if single_project:
+        typer.echo("  MCP client configuration — this project only:")
+    else:
+        typer.echo("  MCP client configuration — paste this ONCE for all projects:")
     typer.echo("")
     typer.echo("    {")
     typer.echo('      "mcpServers": {')
     typer.echo('        "projectmem": {')
     typer.echo(f'          "command": "{py}",')
     typer.echo('          "args": [')
-    typer.echo('            "-m", "projectmem.mcp_server",')
-    typer.echo(f'            "--root", "{root}"')
+    if single_project:
+        typer.echo('            "-m", "projectmem.mcp_server",')
+        typer.echo(f'            "--root", "{root}"')
+    else:
+        typer.echo('            "-m", "projectmem.mcp_server"')
     typer.echo('          ]')
     typer.echo("        }")
     typer.echo("      }")
     typer.echo("    }")
     typer.echo("")
+    if not single_project:
+        # Upgraders are the ones most likely to get this wrong: their client
+        # still holds a --root entry from an older release, so a newly inited
+        # repo is invisible to it until that entry is replaced.
+        try:
+            from projectmem.project_registry import projects as _registered
+
+            others = [p for p in _registered() if p.path != root]
+        except Exception:
+            others = []
+        if others:
+            typer.echo(
+                f"  You already have {len(others)} other project(s) registered. "
+                "Replacing an"
+            )
+            typer.echo(
+                "  older \"--root\" entry with the config above serves all of "
+                "them from one server."
+            )
+            typer.echo("")
+        typer.echo(f"  This project is registered as '{root.name}'. Your AI can")
+        typer.echo("  pass project=\"<name>\" on any call, or you can set a default:")
+        typer.echo(f"    pjm project use {root.name}")
+        typer.echo("")
     typer.echo("  Client config file locations:")
     typer.echo(
         "    Claude Desktop  ~/Library/Application Support/Claude/"
@@ -562,4 +601,6 @@ def _print_mcp_config(root: Path) -> None:
     typer.echo("    Codex (TOML!)   ~/.codex/config.toml")
     typer.echo("")
     typer.echo("  After pasting: fully quit and restart your client (cold start).")
+    if not single_project:
+        typer.echo("  Pinned to one repo instead:  pjm init --mcp-config-single")
     typer.echo(bar)

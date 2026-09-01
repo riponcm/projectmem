@@ -44,7 +44,7 @@ new session. Without it every session begins from zero.
 projectmem is an open-source **agent memory** layer built for that job. It is
 **local-first**: memory lives in a plain `.projectmem/` directory inside your
 repository, with no cloud, no account and no telemetry. A native **MCP server**
-exposes 15 tools to Claude Code, Claude Desktop, Cursor, Antigravity and Codex,
+exposes 17 tools to Claude Code, Claude Desktop, Cursor, Antigravity and Codex,
 so your agent reads memory and logs its work on its own.
 
 Unlike chat-history memory tools, projectmem stores **typed events** — issues,
@@ -207,6 +207,48 @@ The architecture is built around one rule: **AI reads small, distilled files. To
 
 **AI never reads `events.jsonl` directly.** That file is for tools (`pjm score`, `pjm context`, `pjm wrap`). Tools distill the raw log into compact AI-readable summaries.
 
+## One server, many projects
+
+Since 0.3.0 a single MCP server serves every project you have registered. Paste
+the config once and every repo you `pjm init` afterwards is reachable from it —
+no second entry, no restart.
+
+```bash
+pjm project list          # what this server can reach
+pjm project use ossdrop   # the default when a call names no project
+pjm project alias ossdrop od
+```
+
+Your agent picks the project per call:
+
+```
+log_issue(summary="stars come back empty", project="ossdrop")
+→ Logged issue #0019 → ossdrop: stars come back empty
+```
+
+**Every write says where it landed.** That echo is the point: in a one-project
+setup a misconfigured server simply fails, but a shared server can succeed
+against the wrong repository, which corrupts two audit trails at once. If the
+name in the reply is not the project you meant, stop.
+
+How a call is routed, highest first:
+
+| | Source | Notes |
+|---|---|---|
+| 1 | `--root` at startup | A boundary, not a default. A pinned server refuses to write elsewhere, even when asked. |
+| 2 | `project="…"` on the call | id, alias or path. An unknown name is an error. |
+| 3 | The client's workspace root | Only when exactly one resolves. |
+| 4 | The active project | `pjm project use <name>`. |
+| 5 | The working directory | Walks up looking for `.projectmem/`, like git. |
+| 6 | — | Refuses, and lists what is registered. It never guesses. |
+
+Client roots outrank the active project on purpose: the root is where you are
+now, the active project is a mode you set days ago. When they disagree, the
+stale one is the wrong answer.
+
+Single-repo setups are untouched — `pjm init --mcp-config-single` still prints
+the pinned config, and an existing `--root` entry keeps working exactly as before.
+
 ## MCP Integration (Recommended)
 
 **For:** Claude Desktop, Cursor, Antigravity, Codex — and any tool with native MCP support. The MCP server forces the AI to read memory and log every action automatically.
@@ -368,7 +410,8 @@ root or rely on the parent-walk auto-discovery.
 
 ### MCP Tools Exposed
 
-All 15 tools your AI can call:
+All 17 tools your AI can call. Every repo tool takes an optional
+`project` argument — see [One server, many projects](#one-server-many-projects):
 
 **Read-side (10 tools):**
 

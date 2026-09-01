@@ -143,61 +143,51 @@ def initialize(root: Path | None = None) -> Path:
 
 
 def registry_path() -> Path:
-    """The opt-in cross-project registry used by `pjm dashboard`.
+    """The opt-in cross-project registry used by `pjm dashboard` and routing.
 
-    A plain JSON list of absolute project paths. Populated only by `pjm init`
-    (never by a filesystem crawl), so the global dashboard shows ONLY projects
-    you explicitly initialised. No data is copied here — just paths; the
-    dashboard reads each project's own `.projectmem/` at render time.
-
-    Location honours $PROJECTMEM_HOME (defaults to ~/.projectmem) so tests and
-    sandboxes can isolate it instead of writing to the real user registry.
+    Kept here as a re-export so existing callers (and tests) keep working; the
+    file itself is owned by `projectmem.project_registry`, which also handles
+    the v0.2.0 plain-list format.
     """
-    home = os.environ.get("PROJECTMEM_HOME")
-    base = Path(home) if home else (Path.home() / ".projectmem")
-    return base / "projects.json"
+    from projectmem.project_registry import registry_path as _path
+
+    return _path()
 
 
 def register_project(root: Path) -> None:
-    """Add a project's absolute path to the global registry (idempotent)."""
+    """Add a project to the global registry (idempotent).
+
+    Populated only by `pjm init` / `pjm project register` — never a filesystem
+    crawl — so the dashboard shows ONLY projects you explicitly initialised.
+    No memory is copied here, just how to find each repo.
+    """
+    from projectmem.project_registry import RegistryError, register
+
     try:
-        target = str(root.resolve())
-    except OSError:
+        register(root)
+    except (RegistryError, OSError):
+        # Registration is a convenience; never let it fail `pjm init`.
         return
-    reg = registry_path()
-    reg.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        data = json.loads(reg.read_text(encoding="utf-8")) if reg.exists() else []
-    except (json.JSONDecodeError, OSError):
-        data = []
-    paths = [p for p in data if isinstance(p, str)]
-    if target not in paths:
-        paths.append(target)
-        reg.write_text(json.dumps(paths, indent=1) + "\n", encoding="utf-8")
 
 
 def registered_projects() -> list[Path]:
     """Registered projects that still exist and still have a `.projectmem/`.
 
     Stale entries (deleted repos, removed memory) are skipped, not pruned —
-    the registry stays append-only; the reader just filters.
+    forgetting a project is an explicit act (`pjm project remove`), not a
+    side effect of it being briefly unavailable.
     """
-    reg = registry_path()
-    if not reg.exists():
-        return []
-    try:
-        data = json.loads(reg.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return []
+    from projectmem.project_registry import projects as _projects
+
     out: list[Path] = []
     seen: set[str] = set()
-    for entry in data:
-        if not isinstance(entry, str) or entry in seen:
+    for record in _projects():
+        key = str(record.path)
+        if key in seen:
             continue
-        seen.add(entry)
-        path = Path(entry)
-        if (path / MEM_DIR).is_dir():
-            out.append(path)
+        seen.add(key)
+        if (record.path / MEM_DIR).is_dir():
+            out.append(record.path)
     return out
 
 

@@ -235,3 +235,49 @@ def test_mcp_server_instantiation():
     assert mcp is not None
     assert mcp.name == "projectmem"
 
+
+def test_server_builds_when_fastmcp_is_gone(monkeypatch, tmp_path):
+    """mcp 2.x ships `mcp.server.fastmcp` as a module that raises on import.
+
+    Load a fresh copy of mcp_server with that path poisoned and a stand-in for
+    `mcp.server.mcpserver`, so the fallback is exercised even though the test
+    environment has mcp 1.x installed.
+    """
+    import importlib.util
+    import sys
+    import types
+
+    from projectmem import mcp_server as installed
+
+    class _StubServer:
+        def __init__(self, name=None, instructions=None, **kwargs):
+            self.name = name
+            self.tools = []
+
+        def tool(self, *args, **kwargs):
+            def decorate(fn):
+                self.tools.append(fn.__name__)
+                return fn
+            return decorate
+
+        def run(self, *args, **kwargs):  # pragma: no cover - never called here
+            pass
+
+    stub_module = types.ModuleType("mcp.server.mcpserver")
+    stub_module.MCPServer = _StubServer
+    monkeypatch.setitem(sys.modules, "mcp.server.mcpserver", stub_module)
+    # None in sys.modules makes `from … import …` raise ImportError, which is
+    # what mcp 2.x's tombstone module does.
+    monkeypatch.setitem(sys.modules, "mcp.server.fastmcp", None)
+
+    spec = importlib.util.spec_from_file_location(
+        "projectmem._mcp_server_v2_probe", installed.__file__
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert isinstance(module.mcp, _StubServer)
+    assert module.mcp.name == "projectmem"
+    # 15 memory tools + list_projects / current_project for global routing
+    assert len(module.mcp.tools) == 17
+    assert "list_projects" in module.mcp.tools

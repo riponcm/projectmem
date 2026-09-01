@@ -36,9 +36,13 @@ import sys
 from pathlib import Path
 from typing import Annotated, Callable, Optional
 
+# mcp 2.x renamed FastMCP to MCPServer and left `mcp.server.fastmcp` behind as
+# a module that raises on import. We only use the constructor, @tool() and
+# run(), which are identical on both, so a single alias covers the whole SDK
+# range. Reported and fixed by Vivaan Dhawan (#10).
 try:
     from mcp.server.fastmcp import FastMCP
-except (ImportError, ModuleNotFoundError):
+except ImportError:  # mcp >= 2.0
     from mcp.server.mcpserver import MCPServer as FastMCP
 from pydantic import Field
 
@@ -79,13 +83,44 @@ def _resolve_project_root() -> Path | None:
 
 _PROJECT_ROOT = _resolve_project_root()
 if _PROJECT_ROOT is not None:
-    # All tools rely on Path.cwd() via storage helpers; pin it once at startup
-    # so the server keeps working even if some library chdir()s out from under
-    # us mid-session.
+    # Legacy single-project servers still pin the cwd, so anything that reaches
+    # for Path.cwd() behind our backs lands in the right repo.
     try:
         os.chdir(_PROJECT_ROOT)
     except OSError:
         pass
+
+# Global mode: no --root, no $PROJECTMEM_ROOT, and no .projectmem/ above the
+# cwd. One server then serves every registered project and each call decides
+# which one it means. Legacy mode keeps working untouched.
+GLOBAL_MODE = _PROJECT_ROOT is None
+
+ProjectArg = Annotated[Optional[str], Field(
+    description="Which project this call is about — a registered id, alias, "
+                "or absolute path (e.g. 'ossdrop'). Omit it when the server "
+                "was started for a single repo, or when an active project is "
+                "set with `pjm project use`. Call list_projects to see the "
+                "registered names."
+)]
+
+
+def _root_for(project: str | None) -> Path:
+    """Resolve one call to one project root, or raise a readable error.
+
+    Resolution happens per call and is never cached: a long-running server
+    outlives any one project, and a stale cache is how memory ends up in the
+    wrong repository.
+    """
+    from projectmem.resolver import resolve
+
+    return resolve(explicit=project, pinned=_PROJECT_ROOT).root
+
+
+def _target(project: str | None):
+    """Resolution for a write, so the tool can name where it landed."""
+    from projectmem.resolver import resolve
+
+    return resolve(explicit=project, pinned=_PROJECT_ROOT)
 
 
 # ── L-009: stdout suppression for any tool that calls into CLI code ─────
@@ -129,6 +164,18 @@ def safe_tool(fn: Callable) -> Callable:
 
 # ── FastMCP server + L-004 hardened system prompt ───────────────────────
 
+_GLOBAL_INSTRUCTIONS = (
+    "\n\nTHIS SERVER SERVES SEVERAL PROJECTS. Every repo tool takes an "
+    "optional `project` argument (a registered id, alias, or path). When you "
+    "know which project the user means, pass it — it is the only way to be "
+    "certain a write lands in the right repository. If you omit it, the "
+    "server uses the active project or the folder you are in, and refuses to "
+    "guess when neither is available. Call list_projects to see the names, "
+    "and current_project to check where a write would go before making it. "
+    "Write tools tell you which project they wrote to; if that name is not "
+    "the project you meant, stop and say so."
+)
+
 mcp = FastMCP(
     "projectmem",
     instructions=(
@@ -171,6 +218,7 @@ mcp = FastMCP(
         "conversation, and your memory of this project may be stale or\n"
         "wrong. These tools work regardless of working directory; the\n"
         "server already knows the project root."
+        + (_GLOBAL_INSTRUCTIONS if GLOBAL_MODE else "")
     ),
 )
 
@@ -182,7 +230,7 @@ mcp = FastMCP(
 
 @mcp.tool()
 @safe_tool
-def get_instructions() -> str:
+def get_instructions(project: ProjectArg = None) -> str:
     """Read the project's mandatory AI instructions.
 
     MANDATORY: call this at session start. The instructions describe the
@@ -190,7 +238,7 @@ def get_instructions() -> str:
     are not advisory.
 
     Read-only; does not modify memory."""
-    path = ai_instructions_path()
+    path = ai_instructions_path(_root_for(project))
     if path.exists():
         return path.read_text(encoding="utf-8")
     return "No instructions found. Run `pjm init` first."
@@ -198,7 +246,7 @@ def get_instructions() -> str:
 
 @mcp.tool()
 @safe_tool
-def get_summary() -> str:
+def get_summary(project: ProjectArg = None) -> str:
     """Read the project memory summary.
 
     MANDATORY: call this BEFORE answering ANY question about the project.
@@ -213,7 +261,7 @@ def get_summary() -> str:
     work is recorded.
 
     Read-only; does not modify memory or trigger event logging."""
-    path = summary_path()
+    path = summary_path(_root_for(project))
     if path.exists():
         return path.read_text(encoding="utf-8")
     return "No summary found. Run `pjm init` first."
@@ -221,7 +269,7 @@ def get_summary() -> str:
 
 @mcp.tool()
 @safe_tool
-def get_project_map() -> str:
+def get_project_map(project: ProjectArg = None) -> str:
     """Read PROJECT_MAP.md to understand the repo structure.
 
     Call this at session start when structure matters (file layout,
@@ -229,7 +277,7 @@ def get_project_map() -> str:
 
     Read-only. Returns 'No project map found.' if PROJECT_MAP.md hasn't
     been initialized — run `pjm init` first if so."""
-    path = project_map_path()
+    path = project_map_path(_root_for(project))
     if path.exists():
         return path.read_text(encoding="utf-8")
     return "No project map found."
@@ -237,7 +285,7 @@ def get_project_map() -> str:
 
 @mcp.tool()
 @safe_tool
-def get_plan() -> str:
+def get_plan(project: ProjectArg = None) -> str:
     """Read plan.md — the project's INTENT file (ideas + plans).
 
     Call this at session start alongside get_summary(). plan.md records what
@@ -247,7 +295,7 @@ def get_plan() -> str:
     done work to Shipped); do NOT log plans as events.
 
     Read-only. Returns 'No plan found.' if plan.md hasn't been initialized."""
-    path = plan_path()
+    path = plan_path(_root_for(project))
     if path.exists():
         return path.read_text(encoding="utf-8")
     return "No plan found."
@@ -263,6 +311,7 @@ def precheck_file(
                     "disk. Returns 'no warnings' if the file has no "
                     "failure history."
     )],
+    project: ProjectArg = None,
 ) -> str:
     """Check a file's failure history BEFORE modifying it.
 
@@ -273,7 +322,7 @@ def precheck_file(
 
     Read-only; does not modify memory."""
     from projectmem.commands.precheck import _analyze_files
-    events = read_events()
+    events = read_events(_root_for(project))
     warnings = _analyze_files([file_path], events)
     if not warnings:
         return f"{file_path}: no warnings. Safe to modify."
@@ -293,6 +342,7 @@ def get_issue(
                     "(e.g., '0042'). Numeric strings without padding "
                     "(e.g., '42') are also accepted."
     )],
+    project: ProjectArg = None,
 ) -> str:
     """Read one specific issue's full history by ID (token-efficient).
 
@@ -301,7 +351,7 @@ def get_issue(
 
     Read-only."""
     from projectmem.storage import issues_dir
-    idir = issues_dir()
+    idir = issues_dir(_root_for(project))
     matches = list(idir.glob(f"{issue_id}-*.md"))
     if not matches:
         return f"No issue found with ID {issue_id}."
@@ -322,6 +372,7 @@ def search_events(
                     "range: 1-100.",
         ge=1, le=100,
     )] = 10,
+    project: ProjectArg = None,
 ) -> str:
     """Plain-text search across all logged events.
 
@@ -332,7 +383,7 @@ def search_events(
     Read-only. Case-insensitive substring matching against each event's
     summary and notes. Empty result returns a friendly message, not an
     error."""
-    events = read_events()
+    events = read_events(_root_for(project))
     q = query.lower()
     matches = []
     for e in events:
@@ -351,7 +402,7 @@ def search_events(
 
 @mcp.tool()
 @safe_tool
-def get_score() -> str:
+def get_score(project: ProjectArg = None) -> str:
     """Get the project's failure-prevention score.
 
     Returns an A+→F grade with concrete ROI numbers: debugging hours
@@ -363,7 +414,7 @@ def get_score() -> str:
     from projectmem.commands.score import calculate_score
     from projectmem.storage import events_path
     raw = []
-    path = events_path()
+    path = events_path(_root_for(project))
     for line in path.read_text(encoding="utf-8").splitlines():
         if line.strip():
             raw.append(json.loads(line))
@@ -396,6 +447,7 @@ def get_context(
                     "toward (e.g., 'src/auth/'). When omitted, the "
                     "context is project-wide."
     )] = None,
+    project: ProjectArg = None,
 ) -> str:
     """Generate a token-budgeted memory context block.
 
@@ -405,7 +457,7 @@ def get_context(
     Read-only; assembles a freshly-budgeted context block from
     events.jsonl."""
     from projectmem.commands.context import generate_context
-    events = read_events()
+    events = read_events(_root_for(project))
     result = generate_context(events, token_budget=tokens, focus=focus, recent_days=30)
     return result["markdown"]
 
@@ -420,6 +472,7 @@ def get_global_gotchas(
                     "across every library — useful when starting a new "
                     "feature to scan for any relevant past lessons."
     )] = None,
+    project: ProjectArg = None,
 ) -> str:
     """Query cross-project library gotchas from ~/.projectmem/global/.
 
@@ -430,7 +483,7 @@ def get_global_gotchas(
     Read-only. Reads from ~/.projectmem/global/ (cross-project memory,
     not this repo's .projectmem/)."""
     from projectmem.global_memory import read_gotchas
-    gotchas = read_gotchas()
+    gotchas = read_gotchas()  # cross-project store, not this repo's memory
     if library:
         gotchas = [g for g in gotchas if library.lower() in g.get("library", "").lower()]
     if not gotchas:
@@ -465,6 +518,7 @@ def log_issue(
                     "'login/double-submit'). Used by precheck_file to "
                     "surface this history later."
     )] = None,
+    project: ProjectArg = None,
 ) -> str:
     """Open a new issue. Returns the issue ID.
 
@@ -476,8 +530,9 @@ def log_issue(
     creates an issue file in .projectmem/issues/, updates summary.md,
     and marks this issue as the active one for subsequent
     record_attempt calls."""
-    event = log.run(summary, location=location)
-    return f"Logged issue #{event.issue_id}: {summary}"
+    target = _target(project)
+    event = log.run(summary, location=location, root=target.root)
+    return f"Logged issue #{event.issue_id} → {target.name}: {summary}"
 
 
 @mcp.tool()
@@ -505,6 +560,7 @@ def record_attempt(
                     "implicit parent issue is auto-created from this "
                     "attempt's text."
     )] = None,
+    project: ProjectArg = None,
 ) -> str:
     """Record a fix attempt on the current issue.
 
@@ -521,11 +577,14 @@ def record_attempt(
     worked = outcome == "worked"
     failed = outcome == "failed"
     partial = outcome == "partial"
+    target = _target(project)
     event = attempt.run(
         summary, worked=worked, failed=failed, partial=partial,
-        location=location, issue=issue_id, auto_issue=True,
+        location=location, issue=issue_id, auto_issue=True, root=target.root,
     )
-    return f"Recorded {outcome} attempt on #{event.issue_id}: {summary}"
+    return (
+        f"Recorded {outcome} attempt on #{event.issue_id} → {target.name}: {summary}"
+    )
 
 
 @mcp.tool()
@@ -556,6 +615,7 @@ def record_fix(
             )
         ),
     ] = None,
+    project: ProjectArg = None,
 ) -> str:
     """Record a confirmed fix and close an issue.
 
@@ -567,8 +627,9 @@ def record_fix(
 
     Side effects: appends a `fix` event and updates summary.md. The active-issue
     marker is cleared only when the active issue is the issue being fixed."""
-    event = fix.run(summary, location=location, issue=issue_id)
-    return f"Fixed issue #{event.issue_id}: {summary}"
+    target = _target(project)
+    event = fix.run(summary, location=location, issue=issue_id, root=target.root)
+    return f"Fixed issue #{event.issue_id} → {target.name}: {summary}"
 
 
 @mcp.tool()
@@ -593,6 +654,7 @@ def add_decision(
                     "summary.md. Use when precheck_file flags a decision "
                     "as possibly stale and you are revising it."
     )] = None,
+    project: ProjectArg = None,
 ) -> str:
     """Record an architectural or product decision permanently.
 
@@ -603,10 +665,16 @@ def add_decision(
     Side effects: appends a `decision` event and updates summary.md.
     Decisions are append-only — to revise, pass `supersedes` with the old
     decision's event id instead of editing history."""
-    decision.run(summary, location=location, supersedes=supersedes)
+    target = _target(project)
+    decision.run(
+        summary, location=location, supersedes=supersedes, root=target.root
+    )
     if supersedes:
-        return f"Recorded decision (supersedes {supersedes}): {summary}"
-    return f"Recorded decision: {summary}"
+        return (
+            f"Recorded decision → {target.name} "
+            f"(supersedes {supersedes}): {summary}"
+        )
+    return f"Recorded decision → {target.name}: {summary}"
 
 
 @mcp.tool()
@@ -623,6 +691,7 @@ def add_note(
         description="Optional file path or library this note applies to "
                     "(e.g., 'bcrypt' for a library-specific gotcha)."
     )] = None,
+    project: ProjectArg = None,
 ) -> str:
     """Record a gotcha, setup detail, or other durable context.
 
@@ -633,8 +702,62 @@ def add_note(
     Side effects: appends a `note` event. Notes prefixed `gotcha:`,
     `lesson:`, or `warning:` are eligible for auto-promotion to
     ~/.projectmem/global/ for cross-project recall (L-046)."""
-    note.run(summary, location=location)
-    return f"Recorded note: {summary}"
+    target = _target(project)
+    note.run(summary, location=location, root=target.root)
+    return f"Recorded note → {target.name}: {summary}"
+
+
+# ════════════════════════════════════════════════════════════════════════
+# Project routing (global mode)
+# ════════════════════════════════════════════════════════════════════════
+
+
+@mcp.tool()
+@safe_tool
+def list_projects() -> str:
+    """List the projects this server can reach, and which one is active.
+
+    Call this when a tool answers "No project selected", or when you need the
+    exact name to pass as `project`. Read-only; touches no project memory."""
+    from projectmem.project_registry import load_registry
+
+    if not GLOBAL_MODE:
+        name = _PROJECT_ROOT.name if _PROJECT_ROOT else "unknown"
+        return (
+            f"This server is pinned to a single project: {name} "
+            f"({_PROJECT_ROOT}).\nThe `project` parameter is ignored."
+        )
+    registry = load_registry()
+    if not registry.projects:
+        return (
+            "No projects registered. Run `pjm init` in a repo (it registers "
+            "automatically), or `pjm project register <path>`."
+        )
+    lines = [f"{len(registry.projects)} project(s) — pass one as `project`:"]
+    for record in registry.projects:
+        mark = " (active)" if record.id == registry.active_project else ""
+        alias = f" / {record.alias}" if record.alias else ""
+        lines.append(f"  {record.id}{alias}{mark} — {record.path}")
+    if registry.active_project is None:
+        lines.append(
+            "\nNo active project: calls that omit `project` will fail rather "
+            "than guess. Set one with `pjm project use <name>`."
+        )
+    return "\n".join(lines)
+
+
+@mcp.tool()
+@safe_tool
+def current_project(project: ProjectArg = None) -> str:
+    """Show which project a call would resolve to, without writing anything.
+
+    Use this before a write when several projects are in play — it answers
+    "where would this land?" cheaply. Read-only."""
+    target = _target(project)
+    return (
+        f"{target.name} — {target.root}\n"
+        f"chosen by: {target.source}"
+    )
 
 
 def main():

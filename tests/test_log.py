@@ -106,7 +106,10 @@ def test_mcp_record_fix_accepts_target_issue_id(tmp_path, monkeypatch):
 
     result = record_fix("fixed old issue through MCP", issue_id="1")
 
-    assert result == "Fixed issue #0001: fixed old issue through MCP"
+    # Global mode names the project it wrote to, so a mis-route is visible on
+    # the call that caused it rather than during an audit weeks later.
+    assert result.startswith("Fixed issue #0001 → ")
+    assert result.endswith(": fixed old issue through MCP")
     assert (
         tmp_path / ".projectmem" / ".current_issue"
     ).read_text(encoding="utf-8") == "0002"
