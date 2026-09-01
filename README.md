@@ -79,7 +79,7 @@ cd your-project && pjm init
 | Doc | What's in it |
 |---|---|
 | **[TUTORIAL.md](TUTORIAL.md)** | 15-minute step-by-step walkthrough — set up projectmem on your own project, watch the lifecycle, see the pre-commit warning fire. |
-| **[CHANGELOG.md](CHANGELOG.md)** | Release history. Latest: v0.2.0 — the workspace release: the cross-project `pjm dashboard` (serverless + live `--serve`), code structure & relations with failure-heat overlay, and the `plan.md` intent file. |
+| **[CHANGELOG.md](CHANGELOG.md)** | Release history. Latest: v0.3.0 — one server, many projects: global MCP mode, the project registry, and a rebuilt dashboard. |
 | **[Research paper (arXiv:2606.12329)](https://arxiv.org/abs/2606.12329)** | *PROJECTMEM: A Local-First, Event-Sourced Memory and Judgment Layer for AI Coding Agents* — the peer-readable version: design, Memory-as-Governance framing, capability comparison, and the 207-event dogfooding study. |
 | **[LICENSE](LICENSE)** | MIT |
 
@@ -202,6 +202,7 @@ Your project's memory is also something you can *watch* — and share.
 - **Real-time File Watcher** — Background daemon detects rapid edits to the same file (debugging sessions) between commits. Battery-aware, gitignore-aware, auto-started by `pjm init`.
 - **Native MCP Server** — Plugs into Claude Desktop, Cursor, Antigravity, Codex, and any MCP-compatible tool. 15 native tools force the AI to read context, check files for known failures, read your `plan.md`, and log work automatically. Verified end-to-end against all four clients.
 - **Interactive Dashboard** *(expanded in 0.1.6)* — `pjm visualize` opens a six-tab local dashboard: Overview, Story Map (failure heatmap with collapse/focus controls), ROI Dashboard, Project Map (**Flow** / Tree / Graph, now over your real code structure), Timeline (**Time Spine** / Details), and **Showoff** — animated story scenes with a built-in video recorder.
+- **One MCP server for every project** *(new in 0.3.0)* — configure your client once instead of once per repository. Calls name their project (`project="ossdrop"`), or fall back to the active one; every write reports which repo it landed in, and a pinned `--root` server refuses to write outside its own. Existing single-project setups are untouched.
 - **Global Dashboard** *(new in 0.2.0)* — `pjm dashboard` is one cross-project view over every repo you've `pjm init`-ed: grades, issues, savings, and per-project drill-in. A global *view*, never a global *store* — each repo's memory is aggregated at read time and never leaves its folder. Serverless by default; `--serve` for an ephemeral live server (Ctrl+C to stop).
 - **Code Structure + Judgment** *(new in 0.2.0)* — `pjm map --build` reads your codebase into a real import graph, and the Project Map overlays **failure heat** from your event log on top: the files that keep breaking, glowing red over the structure that actually connects them. The structure cache is derived from code and gitignored — never committed.
 - **Intent, separate from memory** *(new in 0.2.0)* — `plan.md` holds ideas and plans (what you *mean* to do), kept deliberately apart from the append-only event log (what *happened*). `pjm plan`, or the MCP `get_plan()`; the AI edits it directly and a plan never becomes an event.
@@ -234,7 +235,7 @@ Your project's memory is also something you can *watch* — and share.
 
 ## 🚧 Upcoming
 
-- **Import your existing memory** — `pjm import` *(planned for 0.2.1)* will migrate history from **mem0**, **agentmemory**, **Letta**, and Claude session logs into projectmem. It maps only to the core event vocabulary — issues, attempts, fixes, decisions, notes — so signal comes in and another tool's clutter stays out. Your judgment history moves with you.
+- **Import your existing memory** — `pjm import` *(planned for 0.3.1)* will migrate history from **mem0**, **agentmemory**, **Letta**, and Claude session logs into projectmem. It maps only to the core event vocabulary — issues, attempts, fixes, decisions, notes — so signal comes in and another tool's clutter stays out. Your judgment history moves with you.
 
 Want a source supported? [Open an issue](https://github.com/riponcm/projectmem/issues) and tell us what you're migrating from.
 
@@ -540,6 +541,17 @@ All 17 tools your AI can call. Every repo tool takes an optional
 | `pjm context [--tokens N]` | Generate token-budgeted project context |
 | `pjm score [--format text\|json\|badge]` | Letter-grade prevention score |
 | `pjm global <action>` | Manage cross-project memory |
+
+### Projects (global MCP)
+
+| Command | Purpose |
+|---|---|
+| `pjm project list` | Every project this server can reach, and which one is active *(new in 0.3.0)* |
+| `pjm project register [path] [--alias a]` | Add a project that already has memory (`pjm init` registers automatically) |
+| `pjm project use [name]` | Set the default project for calls that name none; omit the name to clear it |
+| `pjm project alias <name> <alias>` | Give a project a shorter name |
+| `pjm project tag <name> <tag> [--remove]` | Tag a project |
+| `pjm project remove <name>` | Forget a project — its repo and `.projectmem/` are untouched |
 
 ### Visualization & utility
 

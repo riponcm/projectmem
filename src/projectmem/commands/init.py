@@ -530,6 +530,51 @@ def _detect_main_folders(root: Path) -> list[tuple[str, str]]:
 # absolute Python path baked in to dodge the Claude-Desktop/Cursor PATH
 # gotcha documented in the README) removes a whole class of support questions.
 
+# Known client config locations. We READ these to tell the user what to change
+# — projectmem never edits an MCP client's settings. Printing the config is the
+# whole contract; the user stays in control of their own tooling.
+def _client_configs() -> list[tuple[str, Path]]:
+    """Where each client keeps its MCP settings.
+
+    Built per call, not at import: a module-level Path.home() freezes the home
+    directory for the life of the process, which is wrong for anything that
+    changes HOME (tests, sandboxes) and hides the dependency.
+    """
+    home = Path.home()
+    return [
+        (
+            "Claude Desktop",
+            home / "Library/Application Support/Claude/claude_desktop_config.json",
+        ),
+        ("Claude Desktop", home / "AppData/Roaming/Claude/claude_desktop_config.json"),
+        ("Cursor", home / ".cursor/mcp.json"),
+        ("Antigravity", home / ".gemini/antigravity/mcp_config.json"),
+        ("Codex", home / ".codex/config.toml"),
+    ]
+
+
+def _pinned_client_configs() -> list[tuple[str, Path]]:
+    """Client configs that still pin projectmem to one repo.
+
+    A 0.2.x user upgrading has `--root` (or a `cwd`) in their client config. It
+    keeps working — but only for that one repository, so a project they init
+    today is invisible to the server they already have. Detecting it is the
+    difference between "it just works" and a silent dead end.
+    """
+    found = []
+    for name, path in _client_configs():
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if "projectmem" not in text:
+            continue
+        # crude on purpose: JSON and TOML both, without parsing either
+        if "--root" in text or '"cwd"' in text or "cwd =" in text:
+            found.append((name, path))
+    return found
+
+
 def _print_mcp_config(root: Path, single_project: bool = False) -> None:
     """Print a copy-pasteable MCP client config block + client-config paths.
 
@@ -577,11 +622,28 @@ def _print_mcp_config(root: Path, single_project: bool = False) -> None:
         if others:
             typer.echo(
                 f"  You already have {len(others)} other project(s) registered. "
-                "Replacing an"
+                "The config"
+            )
+            typer.echo("  above reaches all of them from one server.")
+            typer.echo("")
+        pinned = _pinned_client_configs()
+        if pinned:
+            typer.secho(
+                "  ⚠ An existing config still pins projectmem to one repo:",
+                fg=typer.colors.YELLOW,
+            )
+            for client, path in pinned:
+                typer.echo(f"      {client}  {path}")
+            typer.echo(
+                "    Replace that server's \"args\" with the ones above (drop "
+                "--root / cwd)"
             )
             typer.echo(
-                "  older \"--root\" entry with the config above serves all of "
-                "them from one server."
+                "    to serve every project, then fully restart the client. "
+                "Leaving it as"
+            )
+            typer.echo(
+                "    it is keeps working, but only for the repo it points at."
             )
             typer.echo("")
         typer.echo(f"  This project is registered as '{root.name}'. Your AI can")

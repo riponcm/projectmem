@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.3.0
+
+**One server, many projects.** Until now an MCP config was tied to one repository: eleven projects meant eleven server entries and eleven restarts. 0.3.0 serves every registered project from a single server — paste the config once, and every repo you `pjm init` afterwards is reachable from it. Still local-first: no central store, no telemetry, no cross-project memory retrieval. The event schema is unchanged.
+
+### New: global MCP mode
+
+Every repo tool takes an optional `project` argument (a registered id, alias, or path), and two new tools — `list_projects` and `current_project` — let an agent see the names and check where a write would land before making it. 17 tools total.
+
+Resolution happens per call and is never cached, in this order: a pinned `--root`, then an explicit `project`, then the client's workspace root, the active project, the working directory, and finally the sole registered project when there is only one. When none of those apply it raises an error listing what is registered — it never guesses.
+
+Two properties worth knowing:
+
+- **A pinned `--root` is a boundary, not a default.** A server configured for one repository refuses to write anywhere else, even when a call explicitly names another project. Existing 0.2.x configs keep working exactly as before.
+- **Every write names the project it landed in.** In a single-project setup a misconfigured server simply fails; a shared server can succeed against the *wrong* repository, which corrupts two audit trails at once. The echo makes that visible on the call that caused it.
+
+### New: the project registry and `pjm project`
+
+`~/.projectmem/projects.json` grows from a list of paths into schema v1 records with ids, aliases, tags and an active selection. **Migration is automatic** on first read, in place, keeping a `.bak`. `pjm dashboard` and `pjm init` are unaffected.
+
+`pjm project list | register | use | alias | tag | remove` manage it. Removing a project from the registry never touches its repo or its `.projectmem/`.
+
+### Fixed: the MCP server was broken on fresh installs
+
+mcp 2.0.0 (2026-07-28) renamed `FastMCP` to `MCPServer` and left `mcp.server.fastmcp` behind as a module that raises on import. With an unpinned `mcp>=0.1.0`, every `pip install projectmem` after that date got a server that died at import — markdown mode kept working, the tools did not. Reported and fixed by [@VIVAAN-DHAWAN](https://github.com/riponcm/projectmem/pull/10); `pyproject.toml` now declares `mcp>=1.0,<3`.
+
+### Fixed: stored XSS in `pjm visualize`
+
+Event summaries reached the DOM unescaped. Since `pjm`'s auto-capture turns git commit messages into event summaries, a crafted commit in a branch you pulled could execute script in your dashboard — a page that embeds your entire event log. Every sink is escaped now, and a `</script>` in an event no longer breaks the page.
+
+### The dashboard, rebuilt
+
+`pjm visualize` opens on a shareable **Memory Card** (grade, tokens and hours saved, downloadable as a PNG) above **Case files** — every problem with its full issue → attempt → fix chain, one click from the Timeline or the Story Map. The Story Map gains an effort treemap and story lanes alongside the force graph, and any file opens a **dossier**: `precheck_file`, rendered.
+
+`pjm dashboard` now opens with **where you left off** — your last working session reconstructed from event timestamps, what it was, and what it left behind — plus an attention band across every project and a state badge per card.
+
+### Also
+
+- `pjm init` prints the shared MCP config by default; `--mcp-config-single` prints the pinned form. It also warns when an existing client config still pins projectmem to one repo.
+- `pjm dashboard` honours `$PROJECTMEM_HOME` for its output directory, so a sandboxed run no longer overwrites the real dashboard.
+
 ## 0.2.0
 
 **The workspace release: memory grows from one project to your whole machine — and finally meets your code's real structure.** 0.1.6 made a single project's memory something you could watch; 0.2.0 lifts that to every project at once, and closes the gap between *what happened* (memory) and *what the code is* (structure). Still local-first: no central store, no telemetry, no new required dependencies, and the event schema is unchanged — the six core event types (issue, hypothesis, attempt, fix, decision, note) are exactly as before.

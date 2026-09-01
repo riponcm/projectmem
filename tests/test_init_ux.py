@@ -197,16 +197,20 @@ def test_detect_main_folders(tmp_path: Path) -> None:
 
 
 def test_print_mcp_config_contains_expected_pieces(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Default since 0.3.0: one server for every registered project, so the
-    # config deliberately carries no --root.
+    # printed config carries no --root. HOME is redirected because the function
+    # also scans real client configs, and a test must not read the developer's.
+    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
     _print_mcp_config(tmp_path / "myproj")
     out = capsys.readouterr().out
     assert '"mcpServers"' in out
     assert '"projectmem"' in out
     assert '"-m", "projectmem.mcp_server"' in out
-    assert "--root" not in out
+    assert '"--root"' not in out  # not in the JSON block
     assert "pjm project use myproj" in out
     # All 4 client paths should be mentioned.
     assert "Claude Desktop" in out
@@ -234,3 +238,26 @@ def test_print_mcp_config_uses_absolute_python(
     out = capsys.readouterr().out
     # The command must be an absolute path (sys.executable), not bare "python".
     assert f'"command": "{sys.executable}"' in out
+
+
+def test_init_warns_when_a_client_config_still_pins_one_repo(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An upgrader's client still points at one repo — say so, don't edit it."""
+    home = tmp_path / "home"
+    (home / ".cursor").mkdir(parents=True)
+    (home / ".cursor" / "mcp.json").write_text(
+        '{"mcpServers":{"projectmem":{"args":["-m","projectmem.mcp_server",'
+        '"--root","/old/repo"]}}}',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("HOME", str(home))
+
+    _print_mcp_config(tmp_path / "myproj")
+    out = capsys.readouterr().out
+
+    assert "still pins projectmem to one repo" in out
+    assert "Cursor" in out
+    assert str(home / ".cursor" / "mcp.json") in out
+    # the file is reported, never modified
+    assert "--root" in (home / ".cursor" / "mcp.json").read_text(encoding="utf-8")
