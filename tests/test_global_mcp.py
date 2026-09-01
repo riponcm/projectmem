@@ -611,3 +611,52 @@ def test_several_cloud_clients_are_covered(tmp_path, monkeypatch):
     names = {r.name for r in default_roots()}
 
     assert {"Dropbox", "Nextcloud", "iCloudDrive", "Box", "MEGA"} <= names
+
+
+def test_project_lookup_is_case_insensitive(tmp_path, monkeypatch):
+    """Ids are lowercased on the way in; agents pass back what they saw."""
+    monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "home"))
+    project = tmp_path / "MatilyRec"
+    project.mkdir()
+    initialize(project)
+    reg.set_alias("matilyrec", "mrec")
+
+    for name in ("matilyrec", "MatilyRec", "MATILYREC", "mrec", "MRec"):
+        assert reg.load_registry().find(name) is not None, name
+
+
+def test_the_same_folder_reached_twice_registers_once(tmp_path, monkeypatch):
+    """macOS is case-insensitive, so ~/code and ~/Code are one folder.
+
+    Both are in the default scan list, and comparing paths as text registered
+    every project inside twice — as `api` and `api-2`.
+    """
+    monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "home"))
+    work = tmp_path / "work"
+    (work / "api").mkdir(parents=True)
+    initialize(work / "api")
+    (tmp_path / "home" / "projects.json").unlink()
+    (tmp_path / "home" / "projects.meta.json").unlink()
+    # a second name for the same directory — a symlink stands in for the
+    # case-folding a case-insensitive filesystem does for free
+    alias = tmp_path / "work-again"
+    alias.symlink_to(work)
+
+    result = CliRunner().invoke(
+        app, ["doctor", "--fix", "--path", str(work), "--path", str(alias)]
+    )
+
+    assert result.exit_code == 0
+    assert len(reg.projects()) == 1
+
+
+def test_dedupe_paths_uses_identity_not_text(tmp_path):
+    from projectmem.commands.doctor import dedupe_paths
+
+    real = tmp_path / "dir"
+    real.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(real)
+
+    assert len(dedupe_paths([real, link, real])) == 1
+    assert dedupe_paths([tmp_path / "missing"]) == []

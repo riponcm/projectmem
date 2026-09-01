@@ -120,12 +120,13 @@ def scan_command(
     for root in roots:
         if not root.is_dir():
             _fail(f"{root} is not a directory.")
+    from projectmem.commands.doctor import dedupe_paths
+
     found: list[Path] = []
     for root in roots:
         typer.echo(f"Scanning {root} (depth {depth})…")
-        for project in _find_projects(root, depth):
-            if project not in found:
-                found.append(project)
+        found.extend(_find_projects(root, depth))
+    found = dedupe_paths(found)
     if not found:
         typer.echo("No projects with memory found here.")
         return

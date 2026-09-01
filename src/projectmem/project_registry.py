@@ -58,7 +58,12 @@ class ProjectRecord:
 
     def matches(self, identifier: str) -> bool:
         ident = identifier.strip()
-        if ident in (self.id, self.alias):
+        # Case-insensitive: ids are slugified to lowercase, but an agent passes
+        # back whatever it saw — the folder was "MatilyRec", so it says
+        # project="MatilyRec". Refusing that would be pedantry with a data-loss
+        # flavour, since the fallback is an error the agent then works around.
+        lowered = ident.lower()
+        if lowered == self.id or (self.alias and lowered == self.alias.lower()):
             return True
         # A path is a valid identifier too, so an agent can pass what it knows.
         try:

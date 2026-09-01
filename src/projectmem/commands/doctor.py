@@ -77,6 +77,32 @@ def _windows_fixed_drives() -> list[Path]:
         return out
 
 
+def dedupe_paths(paths: list[Path]) -> list[Path]:
+    """Collapse paths that are the same directory.
+
+    Not string comparison, and not resolve(): macOS is case-insensitive by
+    default, so ~/code and ~/Code are one folder while resolve() keeps them
+    distinct — which registered every project inside twice. (device, inode) is
+    the only identity that survives case-folding, symlinks and cloud folders
+    reachable under two names.
+    """
+    seen: set[tuple[int, int]] = set()
+    unique: list[Path] = []
+    for path in paths:
+        try:
+            if not path.is_dir():
+                continue
+            info = path.stat()
+            key = (info.st_dev, info.st_ino)
+        except OSError:
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(path)
+    return unique
+
+
 def default_roots() -> list[Path]:
     """Likely code locations for this machine.
 
@@ -99,22 +125,7 @@ def default_roots() -> list[Path]:
         # C: is covered by the home-directory entries above; scanning it whole
         # would mean walking Windows and Program Files for nothing.
         roots.extend(d for d in _windows_fixed_drives() if d != Path("C:/"))
-    # Cloud folders are often reachable by two names (~/OneDrive - X and
-    # ~/Library/CloudStorage/OneDrive-X are the same place), so dedupe by what
-    # they resolve to rather than scanning the same tree twice.
-    seen: set[Path] = set()
-    unique: list[Path] = []
-    for root in roots:
-        try:
-            if not root.is_dir():
-                continue
-            real = root.resolve()
-        except OSError:
-            continue
-        if real not in seen:
-            seen.add(real)
-            unique.append(root)
-    return unique
+    return dedupe_paths(roots)
 
 
 def run(fix: bool = False, depth: int = 4, roots: list[Path] | None = None) -> None:
@@ -130,10 +141,23 @@ def run(fix: bool = False, depth: int = 4, roots: list[Path] | None = None) -> N
     typer.echo(f"Scanning {len(scan_roots)} location(s) for projects…")
     found: list[Path] = []
     for root in scan_roots:
-        for project in _find_projects(root, depth):
-            if project not in found:
-                found.append(project)
-    missing = [p for p in found if p not in known]
+        found.extend(_find_projects(root, depth))
+    found = dedupe_paths(found)
+    known_keys = set()
+    for path in known:
+        try:
+            info = path.stat()
+            known_keys.add((info.st_dev, info.st_ino))
+        except OSError:
+            continue
+    missing = []
+    for project in found:
+        try:
+            info = project.stat()
+        except OSError:
+            continue
+        if (info.st_dev, info.st_ino) not in known_keys:
+            missing.append(project)
     if missing:
         problems += 1
         typer.secho(
