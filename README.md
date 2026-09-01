@@ -311,19 +311,26 @@ the pinned config, and an existing `--root` entry keeps working exactly as befor
 
 **Upgrading with projects you already have?** The registry only ever recorded
 projects you ran `pjm init` on since it existed (0.2.0), so anything older is
-missing — and global mode routes through the registry. One command finds them:
+missing — and global mode routes through the registry. One command sorts it out:
 
 ```bash
-pjm project scan ~/code --dry-run          # look first
-pjm project scan ~/code ~/work             # several places at once
+pjm doctor          # what's unregistered, what's stale, what's still pinned
+pjm doctor --fix    # register what it found
 ```
 
-```powershell
-pjm project scan D:\ E:\ $env:USERPROFILE --depth 3    # Windows: projects span drives
+It looks in the places code actually lives — `~/Developer`, `~/code`, `~/src`,
+`~/projects` and friends, plus every fixed drive on Windows, where projects sit
+on `D:\` and `E:\` as often as under your home folder. To point it somewhere
+specific:
+
+```bash
+pjm doctor --path ~/work --path /Volumes/ssd --fix
+pjm project scan D:\ E:\ --depth 3     # the same walk, without the other checks
 ```
 
-It walks for `.projectmem/` folders and skips `node_modules`, `.venv` and the
-like. Nothing is scanned unless you ask for it.
+Nothing is scanned until you run it, and nothing is written without `--fix`.
+After an upgrade the CLI mentions `pjm doctor` once — a wheel install can't run
+code, so the first command you type is the only place to say it.
 
 With one project registered, that is the whole setup — there is only one place a call can go. With several, your AI passes `project="<name>"`, or you set a default with `pjm project use <name>`. `pjm init` prints this block with your own Python path already filled in.
 
@@ -562,7 +569,9 @@ All 17 tools your AI can call. Every repo tool takes an optional
 
 | Command | Purpose |
 |---|---|
+| `pjm doctor [--fix] [--path P]` | Find unregistered projects, stale entries and pinned client configs *(new in 0.3.0)* |
 | `pjm project list` | Every project this server can reach, and which one is active *(new in 0.3.0)* |
+| `pjm project scan <dirs> [--depth N] [--dry-run]` | Walk for projects with memory and register them |
 | `pjm project register [path] [--alias a]` | Add a project that already has memory (`pjm init` registers automatically) |
 | `pjm project use [name]` | Set the default project for calls that name none; omit the name to clear it |
 | `pjm project alias <name> <alias>` | Give a project a shorter name |

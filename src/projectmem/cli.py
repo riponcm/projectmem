@@ -10,6 +10,7 @@ from projectmem.commands import backfill as backfill_command
 from projectmem.commands import brief as brief_command
 from projectmem.commands import context as context_command
 from projectmem.commands import decision as decision_command
+from projectmem.commands import doctor as doctor_command
 from projectmem.commands import export as export_command
 from projectmem.commands import global_cmd as global_command
 from projectmem.commands import fix as fix_command
@@ -250,6 +251,16 @@ def visualize(
     visualize_command.run(output=output, open_browser=open_browser)
 
 
+@app.command("doctor")
+def doctor(
+    fix: bool = typer.Option(False, "--fix", help="Apply the fixes, not just report them."),
+    depth: int = typer.Option(3, "--depth", "-d", help="How deep to scan for projects."),
+    path: list[Path] = typer.Option(None, "--path", "-p", help="Scan here instead of the usual places."),
+) -> None:
+    """Check your setup: unregistered projects, stale entries, pinned configs."""
+    doctor_command.run(fix=fix, depth=depth, roots=list(path) if path else None)
+
+
 @app.command("dashboard")
 def dashboard(
     output: Path | None = typer.Option(
@@ -405,7 +416,36 @@ def global_memory(
     )
 
 
+def _upgrade_notice() -> None:
+    """Say once, after an upgrade, that the setup may want a look.
+
+    A wheel install runs none of our code, so the first CLI run afterwards is
+    the only moment we can notice. It is a nudge and nothing more: nothing is
+    scanned or written until the user runs `pjm doctor` themselves.
+    """
+    try:
+        from projectmem import __version__
+        from projectmem.project_registry import record_version, seen_version
+
+        previous = seen_version()
+        if previous == __version__:
+            return
+        record_version(__version__)
+        if previous is None:
+            return  # first ever run — `pjm init` explains itself already
+        typer.secho(
+            f"\nprojectmem upgraded to {__version__} — one MCP server can now "
+            "serve every project.",
+            fg=typer.colors.CYAN,
+        )
+        typer.echo("  Check your setup with:  pjm doctor\n")
+    except Exception:
+        # A notice must never be the reason a command fails.
+        pass
+
+
 def main() -> None:
+    _upgrade_notice()
     try:
         app()
     except ProjectMemError as exc:

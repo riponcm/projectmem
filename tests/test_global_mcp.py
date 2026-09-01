@@ -465,3 +465,90 @@ def test_scan_accepts_several_roots(tmp_path, monkeypatch):
 
     assert result.exit_code == 0
     assert {r.path for r in reg.projects()} == {first / "alpha", second / "beta"}
+
+
+def test_package_version_matches_pyproject():
+    """These drift silently: `pjm doctor` printed 0.2.0 while shipping 0.3.0."""
+    import re
+    from pathlib import Path as _Path
+
+    import projectmem
+
+    pyproject = _Path(__file__).resolve().parents[1] / "pyproject.toml"
+    declared = re.search(r'^version = "([^"]+)"', pyproject.read_text(), re.M).group(1)
+    assert projectmem.__version__ == declared
+
+
+def test_doctor_registers_what_it_finds(tmp_path, monkeypatch):
+    """The upgrade path in one command."""
+    monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    work = tmp_path / "work"
+    (work / "one").mkdir(parents=True)
+    initialize(work / "one")
+    (tmp_path / "home" / "projects.json").unlink()
+    (tmp_path / "home" / "projects.meta.json").unlink()
+
+    runner = CliRunner()
+    report = runner.invoke(app, ["doctor", "--path", str(work), "--depth", "2"])
+
+    assert report.exit_code == 0
+    assert "not registered" in report.stdout
+    assert reg.projects() == ()          # reporting changes nothing
+
+    fixed = runner.invoke(app, ["doctor", "--fix", "--path", str(work), "--depth", "2"])
+
+    assert fixed.exit_code == 0
+    assert [r.path for r in reg.projects()] == [work / "one"]
+
+
+def test_doctor_prunes_entries_whose_memory_is_gone(tmp_path, monkeypatch):
+    monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    gone = tmp_path / "deleted"
+    gone.mkdir()
+    initialize(gone)
+    import shutil
+
+    shutil.rmtree(gone / ".projectmem")
+
+    result = CliRunner().invoke(
+        app, ["doctor", "--fix", "--path", str(tmp_path / "empty-dir"), "--depth", "1"]
+    )
+
+    # a scan path that does not exist is fine; the stale check still runs
+    assert reg.projects() == () or all(
+        (r.path / ".projectmem").is_dir() for r in reg.projects()
+    )
+
+
+def test_upgrade_notice_fires_once(tmp_path, monkeypatch, capsys):
+    """A wheel install runs no code of ours, so the CLI notices — but only once."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("PROJECTMEM_HOME", str(home))
+    (home / "projects.json").write_text("[]", encoding="utf-8")
+    (home / "projects.meta.json").write_text(
+        json.dumps({"by_path": {}, "last_version": "0.2.0"}), encoding="utf-8"
+    )
+
+    from projectmem.cli import _upgrade_notice
+
+    _upgrade_notice()
+    first = capsys.readouterr().out
+    _upgrade_notice()
+    second = capsys.readouterr().out
+
+    assert "upgraded to" in first and "pjm doctor" in first
+    assert second == ""
+
+
+def test_no_notice_on_a_first_ever_run(tmp_path, monkeypatch, capsys):
+    """Nothing to upgrade from — `pjm init` already explains itself."""
+    monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "home"))
+
+    from projectmem.cli import _upgrade_notice
+
+    _upgrade_notice()
+
+    assert capsys.readouterr().out == ""

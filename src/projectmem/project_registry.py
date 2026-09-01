@@ -412,5 +412,24 @@ def unregister(identifier: str) -> ProjectRecord:
     return record
 
 
+def seen_version(path: Path | None = None) -> str | None:
+    """The projectmem version that last touched this registry, if any."""
+    meta = _read_json(meta_path(path or registry_path()))
+    return meta.get("last_version") if isinstance(meta, dict) else None
+
+
+def record_version(version: str, path: Path | None = None) -> None:
+    """Stamp the running version so an upgrade can be noticed once."""
+    file = meta_path(path or registry_path())
+    meta = _read_json(file)
+    if not isinstance(meta, dict):
+        meta = {}
+    meta["last_version"] = version
+    try:
+        _write_atomic(file, meta)
+    except OSError:
+        pass
+
+
 def projects() -> tuple[ProjectRecord, ...]:
     return load_registry().projects
