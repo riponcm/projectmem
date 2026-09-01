@@ -286,3 +286,53 @@ def test_the_first_backup_is_never_overwritten(tmp_path, monkeypatch):
     reg.load_registry()
 
     assert (home / "projects.json.bak").read_text(encoding="utf-8") == original
+
+
+def test_windows_paths_survive_migration(tmp_path, monkeypatch):
+    """A Windows 0.2.x registry holds C:\\... — not a leading slash in sight.
+
+    The junk-entry filter must reject registry keys without also rejecting
+    every path a Windows user has.
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("PROJECTMEM_HOME", str(home))
+    (home / "projects.json").write_text(
+        json.dumps(
+            [
+                "schema_version",              # junk from a clobber
+                r"C:\Users\dev\repos\app",     # ordinary Windows path
+                r"\\fileserver\share\proj",    # UNC share
+                "relative/path",               # never valid
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    ids = [r.id for r in reg.load_registry().projects]
+
+    # On POSIX only the junk-shaped entries are dropped; the Windows-style ones
+    # are not absolute here either, so assert the invariant that holds on both:
+    # nothing that is merely a bare word survives.
+    assert "schema-version" not in ids
+    assert "relative-path" not in ids
+
+
+def test_absolute_check_is_used_rather_than_a_slash_test():
+    """Guard the regression itself.
+
+    The Windows behaviour cannot be exercised from POSIX, so assert on the code:
+    a leading-slash test would silently empty every Windows user's registry.
+    Comments are stripped first — the one above the check names the very
+    pattern it forbids.
+    """
+    import inspect
+
+    from projectmem import project_registry
+
+    code = "\n".join(
+        line.split("#", 1)[0]
+        for line in inspect.getsource(project_registry._migrate_legacy).splitlines()
+    )
+    assert "is_absolute()" in code
+    assert 'startswith("/")' not in code

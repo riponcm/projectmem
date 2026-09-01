@@ -149,7 +149,11 @@ def _migrate_legacy(paths: list[str]) -> Registry:
     taken: set[str] = set()
     records = []
     for raw in paths:
-        if not isinstance(raw, str) or not raw.startswith("/"):
+        # is_absolute(), not startswith("/") — a Windows registry holds
+        # "C:\\Users\\..." and a UNC share holds "\\\\server\\share", neither of
+        # which starts with a slash. Testing for one would have dropped every
+        # entry a Windows user had.
+        if not isinstance(raw, str) or not Path(raw).is_absolute():
             continue
         path = Path(raw)
         ident = _unique_id(slugify(path.name), taken)

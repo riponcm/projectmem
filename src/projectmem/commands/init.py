@@ -592,7 +592,12 @@ def _print_mcp_config(root: Path, single_project: bool = False) -> None:
     stays supported and remains the stricter choice — a pinned server refuses
     to touch any repo but its own.
     """
-    py = sys.executable  # Absolute path — subprocesses don't inherit shell PATH.
+    # Absolute path — subprocesses don't inherit shell PATH. json.dumps() rather
+    # than the bare string: on Windows sys.executable is C:\Users\...\python.exe,
+    # and pasting that raw produces JSON with invalid \U and \n escapes that the
+    # client silently fails to parse.
+    py_raw = sys.executable
+    py = json.dumps(py_raw)[1:-1]
     bar = "═" * 62
     typer.echo("")
     typer.echo(bar)
