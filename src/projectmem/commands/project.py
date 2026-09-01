@@ -98,7 +98,9 @@ def _find_projects(root: Path, max_depth: int) -> list[Path]:
 
 @project_app.command("scan")
 def scan_command(
-    path: Path = typer.Argument(Path("."), help="Where to look (default: here)."),
+    paths: list[Path] = typer.Argument(
+        None, help="Where to look. Several are allowed (default: here)."
+    ),
     depth: int = typer.Option(4, "--depth", "-d", help="How deep to walk."),
     dry_run: bool = typer.Option(
         False, "--dry-run", "-n", help="Show what would be registered, change nothing."
@@ -108,12 +110,22 @@ def scan_command(
 
     Useful after upgrading: the registry only ever recorded projects you ran
     `pjm init` on since it existed (0.2.0), so anything older is missing.
+
+    Takes several locations at once, because projects rarely live in one place —
+    on Windows especially, they are spread across drives:
+
+        pjm project scan D:\\ E:\\ %USERPROFILE% --depth 3
     """
-    root = path.expanduser().resolve()
-    if not root.is_dir():
-        _fail(f"{root} is not a directory.")
-    typer.echo(f"Scanning {root} (depth {depth})…")
-    found = _find_projects(root, depth)
+    roots = [p.expanduser().resolve() for p in (paths or [Path(".")])]
+    for root in roots:
+        if not root.is_dir():
+            _fail(f"{root} is not a directory.")
+    found: list[Path] = []
+    for root in roots:
+        typer.echo(f"Scanning {root} (depth {depth})…")
+        for project in _find_projects(root, depth):
+            if project not in found:
+                found.append(project)
     if not found:
         typer.echo("No projects with memory found here.")
         return

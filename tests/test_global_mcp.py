@@ -447,3 +447,21 @@ def test_scan_is_idempotent(tmp_path, monkeypatch):
 
     assert "already registered" in second.stdout
     assert len(reg.projects()) == 1
+
+
+def test_scan_accepts_several_roots(tmp_path, monkeypatch):
+    """Projects are rarely in one place — on Windows they span drives."""
+    monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "home"))
+    first, second = tmp_path / "d-drive", tmp_path / "e-drive"
+    for base, name in ((first, "alpha"), (second, "beta")):
+        (base / name).mkdir(parents=True)
+        initialize(base / name)
+    (tmp_path / "home" / "projects.json").unlink()
+    (tmp_path / "home" / "projects.meta.json").unlink()
+
+    result = CliRunner().invoke(
+        app, ["project", "scan", str(first), str(second), "--depth", "2"]
+    )
+
+    assert result.exit_code == 0
+    assert {r.path for r in reg.projects()} == {first / "alpha", second / "beta"}

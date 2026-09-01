@@ -314,8 +314,12 @@ projects you ran `pjm init` on since it existed (0.2.0), so anything older is
 missing — and global mode routes through the registry. One command finds them:
 
 ```bash
-pjm project scan ~/code --dry-run   # look first
-pjm project scan ~/code             # then register what it found
+pjm project scan ~/code --dry-run          # look first
+pjm project scan ~/code ~/work             # several places at once
+```
+
+```powershell
+pjm project scan D:\ E:\ $env:USERPROFILE --depth 3    # Windows: projects span drives
 ```
 
 It walks for `.projectmem/` folders and skips `node_modules`, `.venv` and the
