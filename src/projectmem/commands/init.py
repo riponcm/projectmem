@@ -569,8 +569,15 @@ def _pinned_client_configs() -> list[tuple[str, Path]]:
             continue
         if "projectmem" not in text:
             continue
-        # crude on purpose: JSON and TOML both, without parsing either
-        if "--root" in text or '"cwd"' in text or "cwd =" in text:
+        # Crude on purpose: JSON and TOML both, without parsing either. All
+        # three pinning mechanisms count — args, cwd, and the environment
+        # variable, which is how Claude Desktop configs usually do it.
+        if (
+            "--root" in text
+            or '"cwd"' in text
+            or "cwd =" in text
+            or "PROJECTMEM_ROOT" in text
+        ):
             found.append((name, path))
     return found
 
@@ -635,9 +642,10 @@ def _print_mcp_config(root: Path, single_project: bool = False) -> None:
             for client, path in pinned:
                 typer.echo(f"      {client}  {path}")
             typer.echo(
-                "    Replace that server's \"args\" with the ones above (drop "
-                "--root / cwd)"
+                "    Point that server at the config above — drop --root, cwd, "
+                "and any"
             )
+            typer.echo("    PROJECTMEM_ROOT env entry —")
             typer.echo(
                 "    to serve every project, then fully restart the client. "
                 "Leaving it as"
@@ -650,12 +658,24 @@ def _print_mcp_config(root: Path, single_project: bool = False) -> None:
         typer.echo("  pass project=\"<name>\" on any call, or you can set a default:")
         typer.echo(f"    pjm project use {root.name}")
         typer.echo("")
+    typer.echo("  Codex uses TOML, not JSON — for ~/.codex/config.toml:")
+    typer.echo("")
+    typer.echo("    [mcp_servers.projectmem]")
+    typer.echo(f'    command = "{py}"')
+    if single_project:
+        typer.echo(f'    args = ["-m", "projectmem.mcp_server", "--root", "{root}"]')
+    else:
+        typer.echo('    args = ["-m", "projectmem.mcp_server"]')
+    typer.echo("")
     typer.echo("  Client config file locations:")
     typer.echo(
         "    Claude Desktop  ~/Library/Application Support/Claude/"
         "claude_desktop_config.json"
     )
-    typer.echo("    Cursor          ~/.cursor/mcp.json  (per-project)")
+    typer.echo(
+        "    Cursor          ~/.cursor/mcp.json  (global; per-project is "
+        "<repo>/.cursor/mcp.json)"
+    )
     typer.echo(
         "    Antigravity     ~/.gemini/antigravity/mcp_config.json  "
         "(legacy IDE; v2 path may differ)"

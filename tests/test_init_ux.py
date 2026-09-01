@@ -261,3 +261,37 @@ def test_init_warns_when_a_client_config_still_pins_one_repo(
     assert str(home / ".cursor" / "mcp.json") in out
     # the file is reported, never modified
     assert "--root" in (home / ".cursor" / "mcp.json").read_text(encoding="utf-8")
+
+
+def test_init_detects_a_pin_set_through_the_environment(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Claude Desktop configs pin with an env block, not an arg."""
+    home = tmp_path / "home"
+    cfg = home / "Library/Application Support/Claude"
+    cfg.mkdir(parents=True)
+    (cfg / "claude_desktop_config.json").write_text(
+        '{"mcpServers":{"projectmem":{"command":"python","args":["-m",'
+        '"projectmem.mcp_server"],"env":{"PROJECTMEM_ROOT":"/old/repo"}}}}',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("HOME", str(home))
+
+    _print_mcp_config(tmp_path / "myproj")
+    out = capsys.readouterr().out
+
+    assert "still pins projectmem to one repo" in out
+    assert "Claude Desktop" in out
+
+
+def test_init_prints_the_codex_toml_form(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Codex reads TOML — printing only JSON left them to translate it."""
+    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+
+    _print_mcp_config(tmp_path / "myproj")
+    out = capsys.readouterr().out
+
+    assert "[mcp_servers.projectmem]" in out
+    assert 'args = ["-m", "projectmem.mcp_server"]' in out
