@@ -309,6 +309,18 @@ the pinned config, and an existing `--root` entry keeps working exactly as befor
 }
 ```
 
+**Upgrading with projects you already have?** The registry only ever recorded
+projects you ran `pjm init` on since it existed (0.2.0), so anything older is
+missing — and global mode routes through the registry. One command finds them:
+
+```bash
+pjm project scan ~/code --dry-run   # look first
+pjm project scan ~/code             # then register what it found
+```
+
+It walks for `.projectmem/` folders and skips `node_modules`, `.venv` and the
+like. Nothing is scanned unless you ask for it.
+
 With one project registered, that is the whole setup — there is only one place a call can go. With several, your AI passes `project="<name>"`, or you set a default with `pjm project use <name>`. `pjm init` prints this block with your own Python path already filled in.
 
 **Upgrading from 0.2.x?** Your existing `--root` entry keeps working exactly as before, and a pinned server now refuses to write outside its own repo even if asked. Replace it with the block above when you want one server for everything.

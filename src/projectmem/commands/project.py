@@ -6,6 +6,7 @@ copies memory out of the repo, and removing one leaves `.projectmem/` alone.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import typer
@@ -60,13 +61,96 @@ def register_command(
     typer.echo(f"  Use it from any folder:  pjm project use {record.name}")
 
 
+# Directories that never contain a project and would dominate a scan.
+_SKIP = {
+    ".git", "node_modules", "__pycache__", ".venv", "venv", "env",
+    "site-packages", "Library", "AppData", ".cache", ".Trash",
+    "dist", "build", ".next", "target", "vendor", "Pods",
+}
+
+
+def _find_projects(root: Path, max_depth: int) -> list[Path]:
+    """Walk for `.projectmem/` folders.
+
+    Explicit and user-invoked. The registry is still never populated by a
+    background crawl — this runs because someone typed the command and named
+    the directory, which is the difference that matters.
+    """
+    found: list[Path] = []
+    root = root.expanduser().resolve()
+    base_depth = len(root.parts)
+    for current, dirnames, _ in os.walk(root):
+        here = Path(current)
+        if len(here.parts) - base_depth >= max_depth:
+            dirnames[:] = []
+            continue
+        dirnames[:] = [
+            d
+            for d in dirnames
+            # keep .projectmem itself; skip other dotfiles and heavy folders
+            if d == MEM_DIR or (d not in _SKIP and not d.startswith("."))
+        ]
+        if MEM_DIR in dirnames:
+            found.append(here)
+            dirnames[:] = []  # a project inside a project is not a thing
+    return found
+
+
+@project_app.command("scan")
+def scan_command(
+    path: Path = typer.Argument(Path("."), help="Where to look (default: here)."),
+    depth: int = typer.Option(4, "--depth", "-d", help="How deep to walk."),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", "-n", help="Show what would be registered, change nothing."
+    ),
+) -> None:
+    """Find projects that already have memory and add them to the registry.
+
+    Useful after upgrading: the registry only ever recorded projects you ran
+    `pjm init` on since it existed (0.2.0), so anything older is missing.
+    """
+    root = path.expanduser().resolve()
+    if not root.is_dir():
+        _fail(f"{root} is not a directory.")
+    typer.echo(f"Scanning {root} (depth {depth})…")
+    found = _find_projects(root, depth)
+    if not found:
+        typer.echo("No projects with memory found here.")
+        return
+
+    known = {r.path for r in load_registry().projects}
+    fresh = [p for p in found if p not in known]
+    for project in found:
+        mark = "  " if project in known else "+ "
+        note = "  (already registered)" if project in known else ""
+        typer.echo(f"  {mark}{project}{note}")
+    if not fresh:
+        typer.secho(f"\n✓ All {len(found)} already registered.", fg=typer.colors.GREEN)
+        return
+    if dry_run:
+        typer.echo(f"\n{len(fresh)} would be registered. Re-run without --dry-run.")
+        return
+    for project in fresh:
+        try:
+            register(project)
+        except RegistryError as exc:
+            typer.secho(f"  ✗ {project}: {exc}", fg=typer.colors.RED)
+    typer.secho(f"\n✓ Registered {len(fresh)} project(s).", fg=typer.colors.GREEN)
+    typer.echo("  One MCP server now reaches them all — `pjm project list`.")
+
+
 @project_app.command("list")
 def list_command() -> None:
     """Show every registered project."""
     registry = load_registry()
     if not registry.projects:
-        typer.echo("No projects registered yet. Run `pjm init` in a repo, or")
-        typer.echo("`pjm project register <path>` to add one that already has memory.")
+        typer.echo("No projects registered yet.")
+        typer.echo("")
+        typer.echo("  Already have projects with memory? Find them:")
+        typer.echo("    pjm project scan ~/code --dry-run")
+        typer.echo("")
+        typer.echo("  Otherwise run `pjm init` in a repo, or add one directly:")
+        typer.echo("    pjm project register <path>")
         return
     typer.echo(f"{len(registry.projects)} project(s)   ● = active\n")
     for record in registry.projects:

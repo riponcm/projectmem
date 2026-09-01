@@ -393,3 +393,57 @@ def test_a_utf8_bom_does_not_break_the_event_log(tmp_path):
     path.write_bytes(b"\xef\xbb\xbf" + path.read_bytes())
 
     assert [e.summary for e in read_events(project)] == ["first"]
+
+
+def test_scan_finds_projects_the_registry_never_knew_about(tmp_path, monkeypatch):
+    """The upgrade path: the registry only holds what `pjm init` recorded.
+
+    A 0.1.x user has projects with memory and an empty registry, so global mode
+    would have nothing to route to until they re-inited everything by hand.
+    """
+    monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "home"))
+    work = tmp_path / "work"
+    work.mkdir()
+    (work / "one").mkdir()
+    (work / "nested").mkdir()
+    (work / "nested" / "two").mkdir()
+    initialize(work / "one")
+    initialize(work / "nested" / "two")
+    # noise that must not be walked into or registered
+    (work / "node_modules" / "pkg").mkdir(parents=True)
+    (work / "plain").mkdir()
+    # initialize() registers, so clear the registry to reproduce the real
+    # situation: memory on disk that predates the registry existing.
+    (tmp_path / "home" / "projects.json").unlink()
+    (tmp_path / "home" / "projects.meta.json").unlink()
+    assert reg.projects() == ()
+
+    runner = CliRunner()
+    preview = runner.invoke(app, ["project", "scan", str(work), "--dry-run"])
+
+    assert preview.exit_code == 0
+    assert "would be registered" in preview.stdout
+    assert reg.projects() == ()  # dry run changed nothing
+
+    result = runner.invoke(app, ["project", "scan", str(work)])
+
+    assert result.exit_code == 0
+    registered = {r.path for r in reg.projects()}
+    assert registered == {work / "one", work / "nested" / "two"}
+
+
+def test_scan_is_idempotent(tmp_path, monkeypatch):
+    monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "home"))
+    work = tmp_path / "work"
+    work.mkdir()
+    (work / "one").mkdir()
+    initialize(work / "one")
+    (tmp_path / "home" / "projects.json").unlink()
+    (tmp_path / "home" / "projects.meta.json").unlink()
+
+    runner = CliRunner()
+    runner.invoke(app, ["project", "scan", str(work)])
+    second = runner.invoke(app, ["project", "scan", str(work)])
+
+    assert "already registered" in second.stdout
+    assert len(reg.projects()) == 1
