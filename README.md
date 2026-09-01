@@ -39,6 +39,75 @@
 
 ---
 
+> ## 🚀 Start here — five minutes, once
+>
+> **New to projectmem, or upgrading from 0.1.x / 0.2.x?** Since 0.3.0 one MCP
+> server serves every project, so this is the last time you configure anything.
+>
+> **1. Install or update**
+>
+> ```bash
+> pip install -U projectmem
+> ```
+>
+> **2. Find the projects you already have**
+>
+> ```bash
+> pjm doctor
+> ```
+>
+> It looks where code lives — `~/Developer`, `~/code`, `~/projects`, your cloud
+> folders, and every drive on Windows — and lists projects with memory that
+> aren't registered yet. Anything it missed, add by hand:
+>
+> ```bash
+> pjm project register "/Users/you/Developer/repos/ossdrop"
+> ```
+>
+> **3. Register them**
+>
+> ```bash
+> pjm doctor --fix
+> ```
+>
+> **4. Point your AI at all of them with one config**
+>
+> ```json
+> "mcpServers": {
+>   "projectmem": {
+>     "command": "/absolute/path/to/python",
+>     "args": ["-m", "projectmem.mcp_server"]
+>   }
+> }
+> ```
+>
+> No `--root`, no `cwd` — that's what makes it serve everything. Per-client
+> instructions (Claude Desktop, Claude Code, Cursor, Antigravity, Codex) are in
+> [MCP Integration](#mcp-integration-recommended); `pjm init` prints this block
+> with your own Python path filled in. **Then fully restart the client** — MCP
+> servers only load on a cold start.
+>
+> **5. Check your work**
+>
+> ```bash
+> pjm doctor
+> ```
+>
+> Run it again after editing the config. It flags any client still pinned to a
+> single repo — the most common reason a new project is invisible to your agent.
+>
+> **All green? You're done.** From here on it is one command per repo:
+>
+> ```bash
+> pjm init
+> ```
+>
+> Your agent reads what the project already learned instead of rediscovering it,
+> and writes down what it finds. Fewer tokens, no repeated dead ends, memory that
+> outlives the session.
+
+---
+
 ## What is coding agent memory?
 
 **Coding agent memory is a persistent record of what happened while building a
