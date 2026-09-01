@@ -19,6 +19,7 @@ from pathlib import Path
 
 import typer
 
+from projectmem import __version__
 from projectmem.models import Event
 from projectmem.storage import read_events, registered_projects, registry_path
 from projectmem.commands.score import calculate_score
@@ -291,7 +292,8 @@ def _global_html(live: bool = False) -> tuple[str, int]:
         s["href"] = f"p{i}.html"
         stats.append(s)
     payload = _aggregate(stats, all_times, live=live)
-    return GLOBAL_TEMPLATE.replace("{{DASH_DATA}}", json_for_script(payload)), len(stats)
+    html = GLOBAL_TEMPLATE.replace("{{DASH_DATA}}", json_for_script(payload))
+    return html.replace("{{PJM_VERSION}}", __version__), len(stats)
 
 
 def run(
@@ -598,6 +600,8 @@ code{font-family:ui-monospace,Menlo,monospace;background:#DFE7F3;padding:1px 5px
   <div class="h h2">Projects <span class="sub" id="count"></span></div>
   <div class="grid" id="cards"></div>
   <div class="foot">100% local · aggregated at read-time from each repo's <code>.projectmem/</code> · nothing ever leaves your machine · <a href="https://github.com/riponcm/projectmem" target="_blank" rel="noopener">★ GitHub</a> · <a href="https://projectmem.dev/guide" target="_blank" rel="noopener">Docs</a>
+    &middot; projectmem <b id="pm-ver">{{PJM_VERSION}}</b>
+    <a id="pm-check" role="button" tabindex="0" style="cursor:pointer;border-bottom:1px dotted currentColor">check for updates</a>
     <br><span style="opacity:.8">Also from the same maker: <a href="https://ossdrop.com" target="_blank" rel="noopener">OSSDrop</a> — a curated home for open-source tools. Drop yours.</span></div>
 </div>
 <script>
@@ -730,6 +734,38 @@ document.getElementById('cards').innerHTML=P.map(function(p){var c=gc(p.grade);v
     '<div class="ls-ev"><span class="ls-ic" style="background:'+(p.open?'#E8593B':'#12A594')+'">'+(p.open?'!':'\u2713')+
     '</span><div>'+left+'</div></div>'+plan+'</div></div>'+
     '<div class="ls-f">Reconstructed from <code>events.jsonl</code> timestamps \u2014 a session is a run of events under 3\u2009h apart.</div>';
+})();
+
+/* ── Update check — only ever on click ──
+   This page makes no network requests on its own. PyPI's JSON API sends
+   Access-Control-Allow-Origin: *, so the browser can ask it directly, and
+   nothing about this machine is sent beyond the request itself. */
+(function updateCheck(){
+  var link=document.getElementById('pm-check');
+  if(!link) return;
+
+  function asTuple(v){return String(v).split('.').slice(0,3).map(function(part){
+    var m=part.match(/^\d+/); return m?parseInt(m[0],10):0;});}
+  function newer(a,b){var x=asTuple(a),y=asTuple(b);
+    for(var i=0;i<3;i++){if((x[i]||0)!==(y[i]||0))return (x[i]||0)>(y[i]||0);} return false;}
+  function go(){
+    var here=(document.getElementById('pm-ver')||{}).textContent||'';
+    link.textContent='checking\u2026';
+    fetch('https://pypi.org/pypi/projectmem/json').then(function(r){return r.json();})
+      .then(function(d){
+        var latest=d.info.version;
+        if(newer(latest,here)){
+          link.outerHTML='<a href="https://pypi.org/project/projectmem/" target="_blank" '
+            +'rel="noopener" style="font-weight:700">'+E(latest)+' available \u2197</a>';
+        }else{
+          var span=document.createElement('span'); span.textContent='up to date';
+          link.replaceWith(span);
+        }
+      })
+      .catch(function(){ link.textContent='could not reach PyPI'; });
+  }
+  link.addEventListener('click',go);
+  link.addEventListener('keydown',function(e){ if(e.key==='Enter') go(); });
 })();
 
 /* ── Share strip: the portfolio in numbers, drawn locally ── */

@@ -8,6 +8,7 @@ from typing import Any
 
 import typer
 
+from projectmem import __version__
 from projectmem.models import Event, normalize_timestamp
 from projectmem.storage import read_events, require_mem_dir, project_map_path
 from projectmem.commands.stats import calculate_savings
@@ -110,6 +111,7 @@ def run(
         .replace("{{TIMELINE_DATA}}", json_for_script(timeline_data))
         .replace("{{SCORE_DATA}}", json_for_script(score_data))
         .replace("{{PROJECT_NAME}}", json_for_script(project_name))
+        .replace("{{PJM_VERSION}}", __version__)
     )
 
     # 7. Save and (optionally) open
@@ -565,6 +567,14 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
         .side-star .ss-txt { display: flex; flex-direction: column; font-size: 12.5px; font-weight: 700; }
         .side-star .ss-sub { font-size: 9.5px; font-weight: 500; color: #9FB6D2; margin-top: 2px; }
         .side-star .ss-go { margin-left: auto; color: #7FB2F2; font-size: 12px; }
+        .side-upd {
+            display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+            padding: 0 4px 9px; font-size: 10.5px; color: #8FA8C6;
+        }
+        .side-upd b { color: #C9DDF5; font-weight: 600; }
+        .side-upd a { color: #7FB2F2; text-decoration: none; cursor: pointer; border-bottom: 1px dotted #4C7CB5; }
+        .side-upd a:hover { color: #A9CCFA; }
+        .side-upd .new { color: #FFC64D; font-weight: 700; }
         .side-ft {
             padding: 12px; background: #0E3157; border-radius: 10px;
             font-size: 11px; color: #9FB6D2; line-height: 1.55;
@@ -1199,6 +1209,11 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
             <span class="ss-txt">Star projectmem<span class="ss-sub">it's free — stars help it spread</span></span>
             <span class="ss-go">↗</span>
         </a>
+
+        <div class="side-upd">
+            <span>projectmem <b id="pm-ver">{{PJM_VERSION}}</b></span>
+            <a id="pm-check" role="button" tabindex="0">check for updates</a>
+        </div>
 
         <div class="side-ft">
             Generated from<br><b>.projectmem/events.jsonl</b><br>
@@ -1955,6 +1970,46 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
     });
     let smResize;
     window.addEventListener('resize', () => { clearTimeout(smResize); smResize = setTimeout(smRender, 180); });
+
+    // ── Update check — only ever on click ──
+    // This page makes no network requests on its own. PyPI's JSON API sends
+    // Access-Control-Allow-Origin: *, so the browser can ask it directly and
+    // nothing about this machine is sent beyond the request itself.
+    (function updateCheck() {
+        const link = document.getElementById('pm-check');
+        if (!link) return;
+        // read at click time, not load time, so the comparison always reflects
+        // what the page actually shows
+        const asTuple = v => String(v).split('.').slice(0, 3)
+            .map(part => parseInt((part.match(/^\\d+/) || ['0'])[0], 10));
+        const newer = (a, b) => {
+            const x = asTuple(a), y = asTuple(b);
+            for (let i = 0; i < 3; i++) {
+                if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+            }
+            return false;
+        };
+        const go = () => {
+            const here = (document.getElementById('pm-ver') || {}).textContent || '';
+            link.textContent = 'checking…';
+            fetch('https://pypi.org/pypi/projectmem/json')
+                .then(r => r.json())
+                .then(d => {
+                    const latest = d.info.version;
+                    if (newer(latest, here)) {
+                        link.outerHTML = '<a class="new" href="https://pypi.org/project/projectmem/"'
+                            + ' target="_blank" rel="noopener">' + pmEsc(latest)
+                            + ' available \\u2197</a>';
+                    } else {
+                        link.replaceWith(Object.assign(document.createElement('span'),
+                            { textContent: 'up to date' }));
+                    }
+                })
+                .catch(() => { link.textContent = 'could not reach PyPI'; });
+        };
+        link.addEventListener('click', go);
+        link.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+    })();
 
     // ── Memory Card: the shareable hero ──
     (function ovShare() {
