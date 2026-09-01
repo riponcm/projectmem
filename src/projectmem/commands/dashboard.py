@@ -20,7 +20,7 @@ from pathlib import Path
 import typer
 
 from projectmem.models import Event
-from projectmem.storage import read_events, registered_projects
+from projectmem.storage import read_events, registered_projects, registry_path
 from projectmem.commands.score import calculate_score
 from projectmem.commands import visualize as visualize_command
 from projectmem.commands.visualize import json_for_script
@@ -312,7 +312,10 @@ def run(
         return
 
     # ── static (serverless) mode: write a self-contained snapshot to disk ──
-    out_dir = Path(output) if output else (Path.home() / ".projectmem" / "dashboard")
+    # $PROJECTMEM_HOME moves the registry, so it has to move the dashboard too:
+    # otherwise a sandboxed or test run reads isolated projects and then writes
+    # its output over the user's real dashboard.
+    out_dir = Path(output) if output else (registry_path().parent / "dashboard")
     out_dir.mkdir(parents=True, exist_ok=True)
     for i, proj in enumerate(registered_projects()):
         if _project_stats(proj) is None:

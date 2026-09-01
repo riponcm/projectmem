@@ -4,7 +4,7 @@
   <img src="https://raw.githubusercontent.com/projectmem/projectmemdoc/main/logo/projectmem-wordmark-800.png" alt="projectmem" width="420" />
 
   <p><b>We don't make AI smarter. We make it experienced.</b></p>
-  <p><i><b>Coding agent memory</b> — the local-first memory + judgment layer for AI coding agents. Save up to 50%+ of AI tokens. Stop repeating yesterday's bug.</i></p>
+  <p><i><b>Coding agent memory</b> — the local-first memory + judgment layer for AI coding agents. One MCP server for every project. Save up to 50%+ of AI tokens. Stop repeating yesterday's bug.</i></p>
 
   <p>
     <a href="https://pypi.org/project/projectmem/"><img src="https://img.shields.io/pypi/v/projectmem.svg?color=4c1d95&label=pypi" alt="PyPI version"></a>
@@ -30,6 +30,11 @@
   <br />
 
   <img src="https://raw.githubusercontent.com/projectmem/projectmemdoc/main/demo/precheck-warning.gif" alt="projectmem pre-commit warning demo" width="720" />
+
+  <br /><br />
+
+  <img src="https://raw.githubusercontent.com/projectmem/projectmemdoc/main/screenshots/dashboard-overview-0.3.0.png" alt="projectmem dashboard — coding agent memory for one project: memory card, failure heatmap, ROI and case files" width="860" />
+  <p><sub><code>pjm visualize</code> — every case your project solved, what failed on the way, and what it saved. Generated locally from <code>.projectmem/events.jsonl</code>.</sub></p>
 </div>
 
 ---
@@ -103,6 +108,45 @@ That's it. `pjm init` installs three git hooks (pre-commit warnings, post-commit
 > The canonical command is `projectmem`. A `pjm` alias is installed for speed.
 
 ---
+
+## ✨ New in 0.3.0 — one server, many projects
+
+Until now an MCP config was tied to one repository: eleven projects meant eleven
+server entries and eleven restarts. **0.3.0 serves every registered project from
+a single server.** Paste the config once; every repo you `pjm init` afterwards is
+reachable from it.
+
+```bash
+pjm project list          # what this server can reach
+pjm project use ossdrop   # the default when a call names no project
+```
+
+```
+log_issue(summary="stars come back empty", project="ossdrop")
+→ Logged issue #0019 → ossdrop: stars come back empty
+```
+
+Every write names the project it landed in — in a shared server, the dangerous
+failure is not "nothing works", it is a write that succeeds against the wrong
+repo. Existing `--root` configs keep working untouched, and a pinned server now
+*refuses* to write anywhere else even when asked.
+
+Also in 0.3.0:
+
+- **Fixed: the MCP server was broken on fresh installs.** mcp 2.0 renamed
+  `FastMCP` and left the old import path raising — since 2026-07-28 every new
+  `pip install projectmem` got a server that died at import. Caught and fixed by
+  [@VIVAAN-DHAWAN](https://github.com/riponcm/projectmem/pull/10).
+- **Security: stored XSS in `pjm visualize`.** Event summaries reached the DOM
+  unescaped, and git commit messages become event summaries — so a crafted
+  commit in a branch you pulled could run script in your dashboard. Every sink
+  is escaped now.
+- **A rebuilt dashboard** — a shareable Memory Card, case files with the full
+  issue → attempt → fix chain, an effort treemap, per-file dossiers, and a
+  global view that opens with where you left off.
+
+Registry migration is automatic: the 0.2.x list of paths is converted on first
+read, with a `.bak` kept beside it.
 
 ## ✨ New in 0.2.0 — the workspace release
 

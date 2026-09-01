@@ -4,18 +4,22 @@ build-backend = "hatchling.build"
 
 [project]
 name = "projectmem"
-version = "0.2.0"
-description = "AI coding memory — a local-first memory and judgment layer for AI coding agents that warns before repeating failed fixes."
+version = "0.3.0"
+description = "Coding agent memory — local-first memory and judgment for AI coding agents. One MCP server for every project; warns before repeating failed fixes."
 authors = [{ name = "Ripon Chandra Malo" }]
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
 keywords = [
-  # phrase-based: single generic words ("ai", "memory") cannot rank on PyPI
-  "ai-coding-memory", "agent-memory", "ai-agent-memory", "agentic-memory",
-  "memory-for-ai-coding-agents", "persistent-memory", "llm-memory",
-  "mcp", "mcp-server", "model-context-protocol",
-  "claude", "claude-code", "cursor", "codex", "coding-agent",
+  # Phrase-based: single generic words ("ai", "memory") cannot rank on PyPI.
+  # "coding-agent-memory" is the canonical phrase the docs and site all use;
+  # it also contains "agent-memory" as a substring, so it carries the category.
+  "coding-agent-memory", "ai-coding-agent-memory", "agent-memory",
+  "ai-agent-memory", "ai-coding-memory", "agentic-memory", "llm-memory",
+  "memory-for-ai-coding-agents", "persistent-memory", "project-memory",
+  "mcp", "mcp-server", "model-context-protocol", "memory-mcp",
+  "claude", "claude-code", "claude-desktop", "cursor", "codex",
+  "coding-agent", "ai-pair-programming",
   "local-first", "developer-tools", "pre-commit", "ai-memory",
 ]
 dependencies = [

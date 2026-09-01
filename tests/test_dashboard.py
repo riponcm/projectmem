@@ -145,3 +145,21 @@ def test_back_linked_injects_before_body_and_is_safe_without_one():
     assert injected.index("All projects") < injected.index("</body>")
     # no </body> → returned untouched, never corrupted
     assert dashboard_command._back_linked("<div>x</div>") == "<div>x</div>"
+
+
+def test_dashboard_output_follows_projectmem_home(tmp_path, monkeypatch):
+    """A sandboxed run must not overwrite the real dashboard.
+
+    $PROJECTMEM_HOME moves the registry; the output directory has to move with
+    it, or a test run reads isolated projects and writes over ~/.projectmem.
+    """
+    home = tmp_path / "home"
+    monkeypatch.setenv("PROJECTMEM_HOME", str(home))
+    project = tmp_path / "proj"
+    project.mkdir()
+    initialize(project)
+    register_project(project)
+
+    dashboard_command.run(open_browser=False)
+
+    assert (home / "dashboard" / "index.html").is_file()
