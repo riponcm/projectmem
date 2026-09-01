@@ -158,6 +158,7 @@ cd your-project && pjm init
 
 | Doc | What's in it |
 |---|---|
+| **[Complete setup guide](https://projectmem.dev/blog/projectmem-complete-guide-ai-coding-agent-memory)** | The full walkthrough on the web — install, MCP setup per client, `pjm doctor`, your first logged issue, and both dashboards. Every terminal output is captured from a real run. |
 | **[TUTORIAL.md](TUTORIAL.md)** | 15-minute step-by-step walkthrough — set up projectmem on your own project, watch the lifecycle, see the pre-commit warning fire. |
 | **[CHANGELOG.md](CHANGELOG.md)** | Release history. Latest: v0.3.1 — opt-in update checks, on top of 0.3.0's global MCP mode, project registry and rebuilt dashboard. |
 | **[Research paper (arXiv:2606.12329)](https://arxiv.org/abs/2606.12329)** | *PROJECTMEM: A Local-First, Event-Sourced Memory and Judgment Layer for AI Coding Agents* — the peer-readable version: design, Memory-as-Governance framing, capability comparison, and the 207-event dogfooding study. |
@@ -176,6 +177,13 @@ The model isn't the problem. **The architecture is.** Stateless models need a me
 `projectmem` is the local-first memory + judgment layer that sits above your AI tools. It captures every failed attempt, decision, and gotcha — then injects that experience back into future AI sessions. Git tracks *what* changed. `projectmem` tracks *why* it changed, what was tried, and what failed.
 
 ## Install
+
+> **First time here?** → **[The complete setup guide](https://projectmem.dev/blog/projectmem-complete-guide-ai-coding-agent-memory)**
+> walks the whole path end to end: install, connecting Claude Desktop, Claude Code,
+> Cursor, Codex or Antigravity, checking it with `pjm doctor`, and reading your
+> memory back through the dashboards — with the real terminal output at every step.
+
+Three commands to a project that remembers:
 
 ```bash
 pip install projectmem
