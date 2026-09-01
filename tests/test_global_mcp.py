@@ -246,3 +246,43 @@ def test_a_single_registered_project_needs_no_selection(tmp_path, monkeypatch):
     reg.register(_project(tmp_path, "beta"))
     with pytest.raises(ResolutionError):
         resolve()
+
+
+def test_a_clobbered_registry_does_not_become_projects(tmp_path, monkeypatch, capsys):
+    """0.2.x writing over a v1 registry turns its KEYS into list entries.
+
+    `[p for p in data if isinstance(p, str)]` over a dict yields its keys, so a
+    machine running both versions ends up with a registry listing
+    "schema_version" as a project. Those must never become records.
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("PROJECTMEM_HOME", str(home))
+    real = _project(tmp_path, "alpha")
+    (home / "projects.json").write_text(
+        json.dumps(["schema_version", "active_project", "projects", str(real)]),
+        encoding="utf-8",
+    )
+
+    registry = reg.load_registry()
+
+    assert [r.id for r in registry.projects] == ["alpha"]
+    assert "older version of projectmem" in capsys.readouterr().err
+
+
+def test_the_first_backup_is_never_overwritten(tmp_path, monkeypatch):
+    """A second migration must not replace a good backup with a damaged file."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("PROJECTMEM_HOME", str(home))
+    alpha = _project(tmp_path, "alpha")
+    (home / "projects.json").write_text(json.dumps([str(alpha)]), encoding="utf-8")
+
+    reg.load_registry()
+    original = (home / "projects.json.bak").read_text(encoding="utf-8")
+
+    # something downgrades the file again, with less in it
+    (home / "projects.json").write_text(json.dumps([]), encoding="utf-8")
+    reg.load_registry()
+
+    assert (home / "projects.json.bak").read_text(encoding="utf-8") == original

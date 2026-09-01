@@ -138,12 +138,18 @@ def _migrate_legacy(paths: list[str]) -> Registry:
 
     Order is preserved so `pjm dashboard` keeps its card order. The old format
     carried no timestamps, so migration time is the honest answer for both.
+
+    Entries that are not absolute paths are dropped. That is not paranoia: a
+    0.2.x `register_project()` run against a v1 file iterates the dict, gets its
+    KEYS, and writes them back as a list — so a mixed-version machine produces
+    ["schema_version", "active_project", "projects", "/real/path"]. Migrating
+    that verbatim turns registry keys into projects.
     """
     stamp = _now()
     taken: set[str] = set()
     records = []
     for raw in paths:
-        if not isinstance(raw, str):
+        if not isinstance(raw, str) or not raw.startswith("/"):
             continue
         path = Path(raw)
         ident = _unique_id(slugify(path.name), taken)
@@ -167,9 +173,26 @@ def load_registry(path: Path | None = None) -> Registry:
         return Registry()
 
     if isinstance(payload, list):  # v0.2.0
+        clobbered = {"schema_version", "active_project", "projects"} <= set(
+            e for e in payload if isinstance(e, str)
+        )
         migrated = _migrate_legacy(payload)
         _backup(file)
         save_registry(migrated, file)
+        if clobbered:
+            # Fingerprint of an older projectmem having overwritten a v1
+            # registry with its own list format. Say so — the alternative is a
+            # user silently losing projects from their dashboard.
+            import sys
+
+            print(
+                "projectmem: an older version of projectmem rewrote "
+                f"{file} and some projects were lost.\n"
+                "  Re-add them with `pjm project register <path>`, and upgrade "
+                "any other environment\n"
+                "  that still has projectmem < 0.3.0 installed.",
+                file=sys.stderr,
+            )
         return migrated
 
     if not isinstance(payload, dict):
@@ -193,10 +216,17 @@ def load_registry(path: Path | None = None) -> Registry:
 
 
 def _backup(file: Path) -> None:
-    """Keep one copy of the pre-migration file — it cannot be regenerated."""
+    """Keep the FIRST pre-migration copy — it cannot be regenerated.
+
+    Deliberately does not overwrite an existing backup. A second migration
+    usually means something already went wrong upstream, and replacing a good
+    backup with the damaged file is how a recoverable problem becomes a
+    permanent one.
+    """
+    backup = file.with_suffix(".json.bak")
     try:
-        if file.exists():
-            file.with_suffix(".json.bak").write_bytes(file.read_bytes())
+        if file.exists() and not backup.exists():
+            backup.write_bytes(file.read_bytes())
     except OSError:
         pass
 
