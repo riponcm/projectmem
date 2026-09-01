@@ -671,7 +671,12 @@ def _print_mcp_config(root: Path, single_project: bool = False) -> None:
         typer.echo("  pass project=\"<name>\" on any call, or you can set a default:")
         typer.echo(f"    pjm project use {root.name}")
         typer.echo("")
-    typer.echo("  Codex uses TOML, not JSON — for ~/.codex/config.toml:")
+    win = sys.platform.startswith("win")
+    tilde = "%USERPROFILE%\\" if win else "~/"
+    sep = "\\" if win else "/"
+    typer.echo(
+        f"  Codex uses TOML, not JSON — for {tilde}.codex{sep}config.toml:"
+    )
     typer.echo("")
     typer.echo("    [mcp_servers.projectmem]")
     typer.echo(f'    command = "{py}"')
@@ -696,15 +701,15 @@ def _print_mcp_config(root: Path, single_project: bool = False) -> None:
             "($XDG_CONFIG_HOME)"
         )
     typer.echo(
-        "    Cursor          ~/.cursor/mcp.json  (global; per-project is "
-        "<repo>/.cursor/mcp.json)"
+        f"    Cursor          {tilde}.cursor{sep}mcp.json  (global; per-project "
+        f"is <repo>{sep}.cursor{sep}mcp.json)"
     )
     typer.echo(
-        "    Antigravity     ~/.gemini/antigravity/mcp_config.json  "
+        f"    Antigravity     {tilde}.gemini{sep}antigravity{sep}mcp_config.json  "
         "(legacy IDE; v2 path may differ)"
     )
-    typer.echo("    Codex (TOML!)   ~/.codex/config.toml")
-    typer.echo("    Claude Code     claude mcp add  (or ~/.claude.json)")
+    typer.echo(f"    Codex (TOML!)   {tilde}.codex{sep}config.toml")
+    typer.echo(f"    Claude Code     claude mcp add  (or {tilde}.claude.json)")
     typer.echo("")
     typer.echo("  After pasting: fully quit and restart your client (cold start).")
     if not single_project:

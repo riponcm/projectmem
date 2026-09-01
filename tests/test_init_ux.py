@@ -333,3 +333,18 @@ def test_printed_locations_match_the_platform(
 
     assert "~/.config/Claude/claude_desktop_config.json" in out
     assert "Library/Application Support" not in out
+
+
+def test_windows_locations_use_windows_conventions(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Don't hand a Windows user a mix of %APPDATA% and ~/ paths."""
+    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    monkeypatch.setattr(init_module.sys, "platform", "win32")
+
+    _print_mcp_config(tmp_path / "myproj")
+    out = capsys.readouterr().out
+
+    assert r"%USERPROFILE%\.cursor\mcp.json" in out
+    assert r"%USERPROFILE%\.codex\config.toml" in out
+    assert "~/.cursor" not in out
