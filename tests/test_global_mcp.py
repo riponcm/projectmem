@@ -336,3 +336,34 @@ def test_absolute_check_is_used_rather_than_a_slash_test():
     )
     assert "is_absolute()" in code
     assert 'startswith("/")' not in code
+
+
+def test_a_utf8_bom_does_not_empty_the_registry(tmp_path, monkeypatch):
+    """PowerShell's Out-File, Notepad and Set-Content all write a UTF-8 BOM.
+
+    Read as plain utf-8, three invisible bytes make the file unparseable and
+    every project silently disappears — which is exactly what happened on a
+    real Windows machine.
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("PROJECTMEM_HOME", str(home))
+    alpha = _project(tmp_path, "alpha")
+    (home / "projects.json").write_bytes(
+        b"\xef\xbb\xbf" + json.dumps([str(alpha)]).encode("utf-8")
+    )
+
+    assert [r.id for r in reg.load_registry().projects] == ["alpha"]
+
+
+def test_a_utf8_bom_does_not_break_the_event_log(tmp_path):
+    """Same three bytes at the top of events.jsonl used to raise on line 1."""
+    from projectmem.models import Event
+    from projectmem.storage import append_event, events_path, read_events
+
+    project = _project(tmp_path, "alpha")
+    append_event(Event(type="note", summary="first"), root=project)
+    path = events_path(project)
+    path.write_bytes(b"\xef\xbb\xbf" + path.read_bytes())
+
+    assert [e.summary for e in read_events(project)] == ["first"]

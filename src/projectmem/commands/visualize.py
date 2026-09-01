@@ -64,7 +64,7 @@ def run(
     if struct_path.exists():
         try:
             project_map_graph = build_structure_graph(
-                json.loads(struct_path.read_text(encoding="utf-8"))
+                json.loads(struct_path.read_text(encoding="utf-8-sig"))
             )
         except (json.JSONDecodeError, OSError):
             project_map_graph = {"nodes": [], "links": []}

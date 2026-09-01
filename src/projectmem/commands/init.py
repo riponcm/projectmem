@@ -411,7 +411,7 @@ def _extract_project_description(root: Path) -> str | None:
     pj = root / "package.json"
     if pj.exists():
         try:
-            data = json.loads(pj.read_text(encoding="utf-8"))
+            data = json.loads(pj.read_text(encoding="utf-8-sig"))
             desc = data.get("description")
             if isinstance(desc, str) and desc.strip():
                 return desc.strip()
@@ -463,7 +463,7 @@ def _extract_entry_points(root: Path) -> list[str]:
     pj = root / "package.json"
     if pj.exists():
         try:
-            data = json.loads(pj.read_text(encoding="utf-8"))
+            data = json.loads(pj.read_text(encoding="utf-8-sig"))
             scripts = data.get("scripts", {})
             for k in ("start", "dev", "build", "test"):
                 if k in scripts and isinstance(scripts[k], str):

@@ -266,7 +266,7 @@ def _import(file_path: str | None) -> None:
         return
 
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as e:
         typer.echo(f"Invalid JSON: {e}")
         return

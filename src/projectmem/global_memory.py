@@ -237,7 +237,7 @@ def _parse_package_json(path: Path) -> dict[str, Any]:
     tags: set[str] = set()
     libraries: set[str] = set()
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
         for dep_key in ("dependencies", "devDependencies"):
             deps = data.get(dep_key, {})
             for lib in deps:
@@ -613,7 +613,7 @@ def load_promotable_set() -> set[str]:
     path = promotable_cache_path()
     if path.exists():
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
+            data = json.loads(path.read_text(encoding="utf-8-sig"))
             for lib in data.get("libraries", []):
                 if isinstance(lib, str) and lib:
                     libs.add(lib.lower())

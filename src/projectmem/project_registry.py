@@ -172,7 +172,7 @@ def load_registry(path: Path | None = None) -> Registry:
     """
     file = path or registry_path()
     try:
-        payload = json.loads(file.read_text(encoding="utf-8"))
+        payload = json.loads(file.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError):
         return Registry()
 

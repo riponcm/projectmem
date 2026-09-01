@@ -499,7 +499,12 @@ def ensure_gitignore_entry(root: Path) -> None:
 def read_events(root: Path | None = None) -> list[Event]:
     path = events_path(root)
     events: list[Event] = []
-    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    # utf-8-sig, not utf-8: opening events.jsonl in Notepad and saving adds a
+    # UTF-8 BOM, and the plain codec then fails on line 1 — the whole project's
+    # memory unreadable because of three invisible bytes.
+    for line_number, line in enumerate(
+        path.read_text(encoding="utf-8-sig").splitlines(), 1
+    ):
         if not line.strip():
             continue
         try:
