@@ -47,6 +47,10 @@
 
 > ## 🚀 Start here — five minutes, once
 >
+> *Five minutes if you follow along here. Want to be shown instead — every
+> command, the exact output it prints back, and the dashboards at the end?
+> Take **[the complete setup guide](https://projectmem.dev/blog/projectmem-complete-guide-ai-coding-agent-memory)**.*
+>
 > **New to projectmem, or upgrading from 0.1.x / 0.2.x?** Since 0.3.0 one MCP
 > server serves every project, so this is the last time you configure anything.
 >
