@@ -254,7 +254,7 @@ def visualize(
 @app.command("doctor")
 def doctor(
     fix: bool = typer.Option(False, "--fix", help="Apply the fixes, not just report them."),
-    depth: int = typer.Option(3, "--depth", "-d", help="How deep to scan for projects."),
+    depth: int = typer.Option(4, "--depth", "-d", help="How deep to scan for projects."),
     path: list[Path] = typer.Option(None, "--path", "-p", help="Scan here instead of the usual places."),
 ) -> None:
     """Check your setup: unregistered projects, stale entries, pinned configs."""

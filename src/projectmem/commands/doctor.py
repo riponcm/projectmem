@@ -46,6 +46,13 @@ def default_roots() -> list[Path]:
     """
     home = Path.home()
     roots = [home / name for name in _HOME_DIRS]
+    # Cloud-synced folders hold real work — on a managed Windows or Mac,
+    # Documents and Desktop are often redirected into OneDrive entirely.
+    for pattern in ("OneDrive*", "Dropbox*", "Google Drive*", "Library/CloudStorage/*"):
+        try:
+            roots.extend(sorted(home.glob(pattern)))
+        except OSError:
+            continue
     if sys.platform.startswith("win"):
         for letter in string.ascii_uppercase:
             drive = Path(f"{letter}:/")
@@ -57,7 +64,7 @@ def default_roots() -> list[Path]:
     return [r for r in roots if r.is_dir()]
 
 
-def run(fix: bool = False, depth: int = 3, roots: list[Path] | None = None) -> None:
+def run(fix: bool = False, depth: int = 4, roots: list[Path] | None = None) -> None:
     """Report problems; with fix=True, resolve the ones that are safe to."""
     scan_roots = [r.expanduser().resolve() for r in roots] if roots else default_roots()
     registry = load_registry()

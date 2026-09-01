@@ -552,3 +552,32 @@ def test_no_notice_on_a_first_ever_run(tmp_path, monkeypatch, capsys):
     _upgrade_notice()
 
     assert capsys.readouterr().out == ""
+
+
+def test_default_depth_reaches_a_nested_repo_folder(tmp_path, monkeypatch):
+    """D:\\repo\\Group\\Project is three levels down — a common Windows layout."""
+    monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "home"))
+    deep = tmp_path / "drive" / "repo" / "Group" / "Project"
+    deep.mkdir(parents=True)
+    initialize(deep)
+    (tmp_path / "home" / "projects.json").unlink()
+    (tmp_path / "home" / "projects.meta.json").unlink()
+
+    result = CliRunner().invoke(
+        app, ["doctor", "--fix", "--path", str(tmp_path / "drive")]
+    )
+
+    assert result.exit_code == 0
+    assert [r.path for r in reg.projects()] == [deep]
+
+
+def test_cloud_folders_are_included_by_default(tmp_path, monkeypatch):
+    """Managed machines redirect Documents and Desktop into OneDrive."""
+    home = tmp_path / "home"
+    (home / "OneDrive - Some University").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+
+    from projectmem.commands.doctor import default_roots
+
+    assert home / "OneDrive - Some University" in default_roots()
