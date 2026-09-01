@@ -338,3 +338,66 @@ def test_template_has_timeline_spine_view() -> None:
     assert "renderTimelineSpine" in VIZ_TEMPLATE
     # spine defaults to active; Flow is the Project Map default
     assert VIZ_TEMPLATE.index('data-view="flow"') < VIZ_TEMPLATE.index('data-view="tree"')
+
+
+# ── Untrusted event text must never reach the DOM as markup ──
+# Event summaries come from git commit messages, CI output and AI agents, and
+# the dashboard drops them straight into innerHTML. Two failure modes, both
+# reproduced against 0.2.0: a `</script>` in a summary closed the data <script>
+# early (whole dashboard died with a SyntaxError), and an `<img onerror>` in a
+# summary executed when the Timeline rendered.
+
+HOSTILE = '<img src=x onerror="window.__pwned=1"></script><script>window.__pwned=1</script>'
+
+
+def _viz_html(tmp_path: Path) -> str:
+    from projectmem.commands import visualize as visualize_command
+    from projectmem.models import Event
+    from projectmem.storage import append_event, initialize
+
+    initialize(tmp_path)
+    append_event(
+        Event(type="issue", summary=HOSTILE, location=HOSTILE, issue_id="0001"),
+        root=tmp_path,
+    )
+    (tmp_path / ".projectmem" / "PROJECT_MAP.md").write_text(
+        f"# Map\n\n- {HOSTILE}\n", encoding="utf-8"
+    )
+    visualize_command.run(root=tmp_path, open_browser=False)
+    return (tmp_path / ".projectmem" / "viz.html").read_text(encoding="utf-8")
+
+
+def test_viz_data_cannot_close_the_script_tag(tmp_path: Path) -> None:
+    html = _viz_html(tmp_path)
+
+    # Only the two real <script> tags in the template may close one.
+    assert html.count("</script>") == 2
+
+
+def test_viz_embeds_hostile_text_escaped(tmp_path: Path) -> None:
+    html = _viz_html(tmp_path)
+
+    # The payload survives as data (escaped), never as literal markup.
+    assert "<img src=x" not in html
+    assert "\\u003cimg src=x" in html
+
+
+def test_viz_renders_event_text_through_the_escaper(tmp_path: Path) -> None:
+    html = _viz_html(tmp_path)
+
+    # Timeline rows and Story Map tooltips are the innerHTML sinks that a
+    # hostile summary reached in 0.2.0.
+    assert "pmEsc(e.summary)" in html
+    assert "+e.summary+" not in html
+    assert "pmEsc(d.summary" in html
+
+
+def test_json_for_script_escapes_tag_characters() -> None:
+    from projectmem.commands.visualize import json_for_script
+
+    import json as _json
+
+    payload = json_for_script({"s": "</script><script>alert(1)</script>"})
+
+    assert "<" not in payload and ">" not in payload
+    assert _json.loads(payload)["s"] == "</script><script>alert(1)</script>"

@@ -19,6 +19,25 @@ FAILURE_IMPORTANCE_WEIGHT = 3
 ROOT_DIRECTORY_BUCKET = "./"
 
 
+def json_for_script(value: Any) -> str:
+    """JSON for embedding inside an HTML <script> tag.
+
+    `json.dumps` leaves `<` and `>` untouched, so any event text containing
+    `</script>` closes the tag early — the rest of the payload is then parsed
+    as HTML and the whole dashboard dies with a SyntaxError. Escaping `<`, `>`
+    and `&` as \\uXXXX keeps the value a valid JS string while making a tag
+    breakout impossible. U+2028/U+2029 are legal in JSON but not in JS source.
+    """
+    return (
+        json.dumps(value)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
+
+
 def run(
     root: Path | None = None,
     output: Path | None = None,
@@ -85,12 +104,12 @@ def run(
     # 6. Generate the HTML
     html_content = (
         VIZ_TEMPLATE
-        .replace("{{GRAPH_DATA}}", json.dumps(graph_data))
-        .replace("{{PROJECT_MAP}}", json.dumps(project_map_text))
-        .replace("{{PROJECT_MAP_GRAPH}}", json.dumps(project_map_graph))
-        .replace("{{TIMELINE_DATA}}", json.dumps(timeline_data))
-        .replace("{{SCORE_DATA}}", json.dumps(score_data))
-        .replace("{{PROJECT_NAME}}", json.dumps(project_name))
+        .replace("{{GRAPH_DATA}}", json_for_script(graph_data))
+        .replace("{{PROJECT_MAP}}", json_for_script(project_map_text))
+        .replace("{{PROJECT_MAP_GRAPH}}", json_for_script(project_map_graph))
+        .replace("{{TIMELINE_DATA}}", json_for_script(timeline_data))
+        .replace("{{SCORE_DATA}}", json_for_script(score_data))
+        .replace("{{PROJECT_NAME}}", json_for_script(project_name))
     )
 
     # 7. Save and (optionally) open
@@ -533,8 +552,21 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
         .ws-stat { flex: 1; background: #0E3157; border-radius: 9px; padding: 9px 6px; text-align: center; }
         .ws-stat .wv { display: block; font-size: 18px; font-weight: 800; color: #fff; line-height: 1; }
         .ws-stat .wl { display: block; font-size: 9.5px; color: #8FA8C6; margin-top: 4px; font-weight: 600; }
+        .side-star {
+            margin-top: auto; display: flex; align-items: center; gap: 10px;
+            padding: 11px 12px; border-radius: 11px; text-decoration: none;
+            background: linear-gradient(135deg, #14406E, #0F3159 60%, #14406E);
+            border: 1px solid #26568C; color: #EAF2FD; margin-bottom: 8px;
+            transition: transform .13s, border-color .13s, box-shadow .13s;
+        }
+        .side-star:hover { transform: translateY(-1px); border-color: #4C90F0;
+            box-shadow: 0 6px 18px rgba(31,111,235,.28); }
+        .side-star .ss-star { font-size: 16px; color: #FFC64D; line-height: 1; }
+        .side-star .ss-txt { display: flex; flex-direction: column; font-size: 12.5px; font-weight: 700; }
+        .side-star .ss-sub { font-size: 9.5px; font-weight: 500; color: #9FB6D2; margin-top: 2px; }
+        .side-star .ss-go { margin-left: auto; color: #7FB2F2; font-size: 12px; }
         .side-ft {
-            margin-top: auto; padding: 12px; background: #0E3157; border-radius: 10px;
+            padding: 12px; background: #0E3157; border-radius: 10px;
             font-size: 11px; color: #9FB6D2; line-height: 1.55;
         }
         .side-ft b { color: #fff; font-weight: 600; }
@@ -584,6 +616,53 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
 
         /* ═══ Story Map ═══ */
         #canvas { width:100%; height:100%; }
+        /* view modes: Treemap (default) · Lanes · Graph (the original force map) */
+        #panel-story .sm-toggle { top:16px; left:16px; z-index:7; }
+        #panel-story .story-controls { top:60px; }
+        #panel-story:not(.sm-graph) #canvas,
+        #panel-story:not(.sm-graph) .story-controls,
+        #panel-story:not(.sm-graph) .map-legend { display:none; }
+        .sm-view { position:absolute; inset:0; overflow:auto; padding:62px 22px 24px; display:none; }
+        #panel-story.sm-tree #sm-tree { display:block; }
+        #panel-story.sm-lanes #sm-lanes { display:block; }
+        .sm-head { display:flex; align-items:baseline; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+        .sm-head h3 { font-size:14.5px; font-weight:700; color:var(--navy); }
+        .sm-head .d { font-size:11.5px; color:var(--text-muted); }
+        .sm-head .r { margin-left:auto; display:flex; align-items:center; gap:6px; }
+        .sm-chip { border:1px solid var(--border); background:var(--surface); color:var(--text-dim);
+                   border-radius:7px; padding:4px 10px; font:600 11px 'JetBrains Mono',monospace; cursor:pointer; }
+        .sm-chip.on { background:var(--primary-glow); color:var(--primary); border-color:transparent; }
+        .sm-chip[disabled] { opacity:.35; cursor:default; }
+        /* treemap */
+        .tm-wrap { position:relative; width:100%; height:calc(100% - 84px); min-height:320px;
+                   background:var(--surface2); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+        .tm-tile { position:absolute; border:2px solid var(--surface); border-radius:8px; cursor:pointer;
+                   overflow:hidden; padding:7px 9px; transition:filter .13s, box-shadow .13s; }
+        .tm-tile:hover { filter:brightness(1.06); z-index:5; box-shadow:0 6px 20px rgba(11,42,74,.22); }
+        .tm-fn { font-size:11.5px; font-weight:600; line-height:1.25; word-break:break-all; }
+        .tm-mt { font:600 10px 'JetBrains Mono',monospace; opacity:.82; margin-top:3px; }
+        .sm-legend { display:flex; gap:15px; align-items:center; margin-top:11px; font-size:11px;
+                     color:var(--text-dim); flex-wrap:wrap; }
+        .sm-sw { width:20px; height:11px; border-radius:3px; display:inline-block; vertical-align:middle; margin-right:5px; }
+        .sm-sw.rnd { width:11px; height:11px; border-radius:50%; }
+        /* lanes */
+        .sl-row { display:grid; grid-template-columns:220px 1fr 104px; align-items:center; gap:10px;
+                  padding:3px 6px; border-radius:8px; cursor:pointer; }
+        .sl-row:hover { background:var(--surface2); }
+        .sl-fp { font:11.5px 'JetBrains Mono',monospace; color:#33455E; text-align:right; direction:rtl;
+                 white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .sl-track { position:relative; height:26px; border-bottom:1px dashed var(--border); }
+        .sl-pt { position:absolute; top:7px; width:12px; height:12px; border-radius:50%; border:2px solid var(--surface);
+                 transform:translateX(-50%); box-shadow:0 1px 3px rgba(16,47,82,.2); transition:transform .12s; }
+        .sl-pt:hover { transform:translateX(-50%) scale(1.4); }
+        .sl-rt { font-size:11px; color:var(--text-dim); font-weight:600; }
+        .sl-rt b { color:var(--error); }
+        .sl-axis { display:flex; justify-content:space-between; margin:6px 0 0 230px;
+                   font:10.5px 'JetBrains Mono',monospace; color:var(--text-muted); }
+        /* file dossier banner (reuses the case-modal shell) */
+        .cm-warn { margin:14px 20px 0; background:#FFF6E9; border:1px solid rgba(232,163,59,.4);
+                   border-radius:10px; padding:11px 13px; font-size:12.5px; line-height:1.5; }
+        .cm-warn b { color:#9A6B12; }
         .story-link { stroke-opacity:0.35; stroke-width:1px; }
         .story-node { cursor:pointer; transition: filter 0.2s; }
         .story-node:hover { filter: brightness(1.3); }
@@ -716,6 +795,11 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
         #map-tree { width:100%; height:100%; display:none; }
         .map-graph-pane.tree-mode #map-canvas { display:none; }
         .map-graph-pane.tree-mode #map-tree { display:block; }
+        #tree-filter-host { display:none; }
+        .map-graph-pane.tree-mode #tree-filter-host { display:block; }
+        .tree-legend { position:absolute; right:14px; bottom:14px; z-index:6; display:flex; gap:12px;
+            align-items:center; background:var(--surface); border:1px solid var(--border);
+            border-radius:9px; padding:7px 11px; font-size:10.5px; color:var(--text-dim); }
         #map-flow { position:absolute; inset:0; overflow:hidden; display:none; }
         .flow-filter::-webkit-scrollbar { width:6px; } .flow-filter::-webkit-scrollbar-thumb { background:var(--border-light); border-radius:3px; }
         .flow-filter .ff-row:hover { background:var(--surface2); }
@@ -958,10 +1042,87 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
         .ov-lane .ln { width:72px; font-size:11.5px; font-weight:700; text-align:right; }
         .ov-track { flex:1; height:22px; position:relative; border-bottom:1px dashed var(--border-light); }
         .ov-ev { position:absolute; top:3px; width:14px; height:14px; border-radius:50%; border:2px solid #fff;
-                 transform:translateX(-50%); box-shadow:0 1px 2px rgba(16,47,82,.18); }
+                 transform:translateX(-50%); box-shadow:0 1px 2px rgba(16,47,82,.18); cursor:pointer; transition:transform .12s; }
+        .ov-ev:hover { transform:translateX(-50%) scale(1.45); box-shadow:0 2px 7px rgba(16,47,82,.30); z-index:2; }
         .ov-axis { display:flex; justify-content:space-between; margin:6px 0 0 80px; font:10.5px ui-monospace,Menlo,monospace; color:var(--text-muted); }
         .ov-foot { display:flex; gap:16px; align-items:center; margin-top:12px; font-size:11px; color:var(--text-dim); flex-wrap:wrap; }
-        @media (max-width:1080px){ .ov-grid{ grid-template-columns:1fr; } }
+        /* full-width rows inside the 2-col overview grid */
+        .ov-wide { grid-column:1 / -1; }
+        /* ── Memory Card (shareable hero) ── */
+        .mc-wrap { display:grid; grid-template-columns:1.3fr .82fr; gap:18px; align-items:stretch; }
+        .mc-card { background:linear-gradient(150deg,#0B2A4A,#123B66 55%,#0E2F52); border-radius:15px;
+                   padding:24px 26px; color:#EAF2FD; position:relative; overflow:hidden; }
+        .mc-card:after { content:""; position:absolute; inset:0; pointer-events:none;
+                   background:radial-gradient(circle at 88% 6%, rgba(31,111,235,.42), transparent 52%); }
+        .mc-top { display:flex; justify-content:space-between; align-items:flex-start; position:relative; z-index:1; gap:14px; }
+        .mc-proj { font-size:19px; font-weight:800; letter-spacing:-.2px; }
+        .mc-sub { font-size:11.5px; color:#9DBBE0; margin-top:3px; font-family:ui-monospace,Menlo,monospace; }
+        .mc-grade { width:74px; height:74px; border-radius:50%; border:3px solid var(--success); flex-shrink:0;
+                    display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(22,159,132,.12); }
+        .mc-grade b { font-size:29px; font-weight:800; line-height:1; color:#4FD2B4; }
+        .mc-grade span { font-size:9px; color:#9DBBE0; margin-top:2px; letter-spacing:.5px; }
+        .mc-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:20px; position:relative; z-index:1; }
+        .mc-stat .v { font-size:25px; font-weight:800; letter-spacing:-.4px; }
+        .mc-stat .k { font-size:9.5px; color:#9DBBE0; letter-spacing:1px; text-transform:uppercase; margin-top:2px; font-weight:700; }
+        .mc-line { margin-top:18px; padding-top:13px; border-top:1px solid rgba(255,255,255,.13);
+                   display:flex; justify-content:space-between; align-items:center; gap:12px; position:relative; z-index:1; }
+        .mc-quote { font-size:12px; color:#C9DDF5; line-height:1.5; }
+        .mc-mark { font-size:10.5px; font-weight:700; color:#7FB2F2; font-family:ui-monospace,Menlo,monospace; white-space:nowrap; }
+        .mc-acts { display:flex; flex-direction:column; gap:8px; }
+        .mc-btn { display:flex; align-items:center; gap:9px; background:var(--surface); border:1px solid var(--border-light);
+                  border-radius:10px; padding:10px 13px; font-size:12.5px; font-weight:600; cursor:pointer;
+                  color:var(--text); font-family:inherit; text-align:left; transition:.15s; text-decoration:none; }
+        .mc-btn:hover { border-color:var(--primary); color:var(--primary); }
+        .mc-btn.primary { background:var(--primary); color:#fff; border-color:var(--primary); }
+        .mc-btn.primary:hover { background:#1A5FCC; color:#fff; }
+        .mc-btn .ic { width:18px; text-align:center; flex-shrink:0; }
+        .mc-btn.star { background:var(--navy); color:#EAF2FD; border-color:var(--navy); }
+        .mc-btn.star:hover { background:#123B66; color:#fff; }
+        .mc-note { font-size:10.5px; color:var(--text-muted); line-height:1.5; margin-top:2px; }
+        /* ── Case files ── */
+        .cw-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+        .cw { background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:13px 15px;
+              cursor:pointer; position:relative; transition:.15s; }
+        .cw:hover { border-color:var(--primary); background:#fff; box-shadow:0 6px 20px rgba(31,111,235,.10); transform:translateY(-1px); }
+        .cw .cid { font:10px ui-monospace,Menlo,monospace; color:var(--text-muted); font-weight:700; letter-spacing:.5px; }
+        .cw .prob { font-size:12.5px; font-weight:600; line-height:1.42; margin:5px 0 9px; color:var(--navy);
+                    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+        .cw .chain { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+        .cpill { padding:2px 8px; border-radius:20px; font-size:9.5px; font-weight:800; letter-spacing:.4px; }
+        .cp-issue { background:rgba(232,89,59,.12); color:var(--error); }
+        .cp-try { background:rgba(232,163,59,.16); color:#9A6B12; }
+        .cp-fix { background:rgba(22,159,132,.13); color:var(--success); }
+        .cp-open { background:rgba(31,111,235,.10); color:var(--primary); }
+        .cw .arw { color:var(--text-muted); font-size:11px; }
+        .cw .file { font:10.5px ui-monospace,Menlo,monospace; color:var(--text-dim); margin-top:9px;
+                    padding-top:9px; border-top:1px dashed var(--border); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .cw .go { position:absolute; top:12px; right:14px; font-size:10px; color:var(--primary); font-weight:700; opacity:0; transition:.15s; }
+        .cw:hover .go { opacity:1; }
+        /* ── Case modal ── */
+        .cm-back { position:fixed; inset:0; background:rgba(11,42,74,.42); backdrop-filter:blur(2px);
+                   display:none; align-items:center; justify-content:center; z-index:80; padding:26px; }
+        .cm-back.on { display:flex; }
+        .cm { background:var(--surface); border:1px solid var(--border-light); border-radius:15px; width:min(680px,100%);
+              max-height:86vh; display:flex; flex-direction:column; box-shadow:0 24px 60px rgba(11,42,74,.28); overflow:hidden; }
+        .cm-h { padding:15px 20px; border-bottom:1px solid var(--border); background:var(--surface2);
+                display:flex; justify-content:space-between; align-items:center; gap:12px; }
+        .cm-h .t { font-size:14px; font-weight:700; color:var(--navy); }
+        .cm-h .d { font-size:11px; color:var(--text-muted); white-space:nowrap; }
+        .cm-x { cursor:pointer; border:none; background:none; font-size:19px; color:var(--text-muted); line-height:1; font-family:inherit; }
+        .cm-b { padding:18px 20px; overflow-y:auto; }
+        .cm-step { display:flex; gap:12px; padding-bottom:15px; position:relative; }
+        .cm-step:not(:last-child):before { content:""; position:absolute; left:11px; top:26px; bottom:1px; width:2px; background:var(--border-light); }
+        .cm-dot { width:24px; height:24px; border-radius:50%; flex-shrink:0; display:flex; align-items:center;
+                  justify-content:center; font-size:11px; font-weight:800; color:#fff; z-index:1; }
+        .cm-k { font-size:9.5px; font-weight:800; letter-spacing:.8px; text-transform:uppercase; margin-bottom:3px; }
+        .cm-s { font-size:12.5px; line-height:1.55; color:var(--text); }
+        .cm-tag { display:inline-block; background:var(--surface3); border-radius:5px; padding:1px 6px;
+                  font:10.5px ui-monospace,Menlo,monospace; color:var(--text-dim); }
+        .cm-f { padding:11px 20px; border-top:1px solid var(--border); background:var(--surface2);
+                display:flex; gap:10px; align-items:center; font-size:11.5px; color:var(--text-dim); }
+        .tl-item.clickable { cursor:pointer; }
+        .tl-item.clickable:hover { background:var(--surface2); }
+        @media (max-width:1080px){ .ov-grid{ grid-template-columns:1fr; } .mc-wrap{ grid-template-columns:1fr; } .cw-grid{ grid-template-columns:1fr; } }
 
         /* ═══ Showoff — dark cinema stage ═══ */
         .so-wrap { display:flex; flex-direction:column; height:100%; background:#070c16; }
@@ -1033,6 +1194,12 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
             <div class="ws-stat"><span class="wv" id="ws-grade">—</span><span class="wl">grade</span></div>
         </div>
 
+        <a class="side-star" href="https://github.com/riponcm/projectmem" target="_blank" rel="noopener">
+            <span class="ss-star">★</span>
+            <span class="ss-txt">Star projectmem<span class="ss-sub">it's free — stars help it spread</span></span>
+            <span class="ss-go">↗</span>
+        </a>
+
         <div class="side-ft">
             Generated from<br><b>.projectmem/events.jsonl</b><br>
             <span style="opacity:.75">100% local · no telemetry</span><br>
@@ -1057,6 +1224,34 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
               <span class="ov-pill"><span class="ov-g"></span> live · regenerated on every event</span>
             </div>
             <div class="ov-grid">
+
+              <!-- 0. Memory Card — the shareable hero -->
+              <section class="ov-card ov-wide">
+                <div class="ov-ph"><span class="ov-tag" style="background:var(--navy)"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v18H6.5A2.5 2.5 0 0 1 4 18.5z"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/></svg></span>
+                  <h2>Memory Card</h2><span class="ov-d">what this project has saved</span></div>
+                <div class="ov-psub">Rendered locally from your own events — nothing uploads. Share it, or keep it.</div>
+                <div class="mc-wrap">
+                  <div class="mc-card" id="mc-card">
+                    <div class="mc-top">
+                      <div><div class="mc-proj" id="mc-proj">project</div><div class="mc-sub" id="mc-sub">0 events</div></div>
+                      <div class="mc-grade" id="mc-grade-ring"><b id="mc-grade">—</b><span id="mc-score">0/100</span></div>
+                    </div>
+                    <div class="mc-stats">
+                      <div class="mc-stat"><div class="v" id="mc-tok">0</div><div class="k">Tokens saved</div></div>
+                      <div class="mc-stat"><div class="v" id="mc-hrs">0h</div><div class="k">Hours saved</div></div>
+                      <div class="mc-stat"><div class="v" id="mc-cases">0</div><div class="k">Cases closed</div></div>
+                    </div>
+                    <div class="mc-line"><div class="mc-quote" id="mc-quote"></div><div class="mc-mark">projectmem.dev</div></div>
+                  </div>
+                  <div class="mc-acts">
+                    <button class="mc-btn primary" id="mc-png"><span class="ic">↓</span> Download card (PNG)</button>
+                    <button class="mc-btn" id="mc-badge"><span class="ic">⌘</span> Copy README badge</button>
+                    <a class="mc-btn star" id="mc-star" href="https://github.com/riponcm/projectmem" target="_blank" rel="noopener"><span class="ic">★</span> Star projectmem on GitHub</a>
+                    <a class="mc-btn" id="mc-x" href="#" target="_blank" rel="noopener"><span class="ic">𝕏</span> Post to X</a>
+                    <div class="mc-note">The card is drawn on your machine from <span class="cm-tag">.projectmem/events.jsonl</span>. No account, no upload, no telemetry.</div>
+                  </div>
+                </div>
+              </section>
 
               <!-- 1. Story Map: failure heatmap -->
               <section class="ov-card">
@@ -1085,17 +1280,18 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
                 </div>
               </section>
 
-              <!-- 3. Project Map: mini graph -->
-              <section class="ov-card">
-                <div class="ov-ph"><span class="ov-tag" style="background:var(--primary)"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.6"/><circle cx="5" cy="19" r="2.6"/><circle cx="19" cy="19" r="2.6"/><line x1="12" y1="7.5" x2="5.8" y2="16.6"/><line x1="12" y1="7.5" x2="18.2" y2="16.6"/></svg></span>
-                  <h2>Project Map</h2><span class="ov-d">structure</span>
-                  <span class="ov-jump" data-go="map">open ↗</span></div>
-                <div class="ov-psub">Repo structure as a graph — node size = activity, red ring = files with failures.</div>
-                <div class="ov-mapwrap"><svg id="ov-map" width="100%" height="232"></svg></div>
+              <!-- 3. Case files: issue -> attempts -> fix -->
+              <section class="ov-card ov-wide">
+                <div class="ov-ph"><span class="ov-tag" style="background:var(--primary)"><svg viewBox="0 0 24 24"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h4l2 2.5h5A2.5 2.5 0 0 1 20 9v8.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5z"/></svg></span>
+                  <h2>Case files</h2><span class="ov-d" id="cw-count">no cases yet</span>
+                  <span class="ov-jump" data-go="timeline">open ↗</span></div>
+                <div class="ov-psub">Every problem with its full chain — what broke, what was tried, what worked. Click a case to read it.</div>
+                <div class="cw-grid" id="cw-grid"></div>
+                <div class="ov-foot" id="cw-foot"></div>
               </section>
 
               <!-- 4. Timeline: swimlanes -->
-              <section class="ov-card">
+              <section class="ov-card ov-wide">
                 <div class="ov-ph"><span class="ov-tag" style="background:var(--warning)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></span>
                   <h2>Timeline</h2><span class="ov-d">project history</span>
                   <span class="ov-jump" data-go="timeline">open ↗</span></div>
@@ -1110,7 +1306,33 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
         </div>
 
         <!-- Story Map -->
-        <div class="panel" id="panel-story">
+        <div class="panel sm-tree" id="panel-story">
+            <div class="map-view-toggle sm-toggle">
+                <button class="map-view-btn active" data-smview="tree">Treemap</button>
+                <button class="map-view-btn" data-smview="lanes">Lanes</button>
+                <button class="map-view-btn" data-smview="graph">Graph</button>
+            </div>
+            <div class="sm-view" id="sm-tree">
+                <div class="sm-head"><h3>Effort treemap</h3>
+                    <span class="d">area = events on the file · colour = issues and failed attempts</span>
+                    <span class="d r" id="tm-foot"></span></div>
+                <div class="tm-wrap" id="tm-wrap"></div>
+                <div class="sm-legend">
+                    <span><i class="sm-sw" style="background:#DCE6F1"></i>quiet</span>
+                    <span><i class="sm-sw" style="background:rgba(232,89,59,.24)"></i>1</span>
+                    <span><i class="sm-sw" style="background:rgba(232,89,59,.55)"></i>2</span>
+                    <span><i class="sm-sw" style="background:#E8593B"></i>3+ issues / failed attempts</span>
+                    <span style="margin-left:auto">Click a file for its dossier</span>
+                </div>
+            </div>
+            <div class="sm-view" id="sm-lanes">
+                <div class="sm-head"><h3>Story lanes</h3>
+                    <span class="d">one lane per file, left to right in time</span>
+                    <span class="r" id="sl-range"></span></div>
+                <div id="sl-rows"></div>
+                <div class="sl-axis" id="sl-axis"></div>
+                <div class="sm-legend" id="sl-legend"></div>
+            </div>
             <div class="story-controls">
                 <button class="story-control-btn" id="story-file-collapse">Collapse dense files</button>
                 <button class="story-control-btn" id="story-directory-collapse">Collapse directories</button>
@@ -1187,6 +1409,7 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
                     </div>
                     <svg id="map-canvas"></svg>
                     <svg id="map-tree"></svg>
+                    <div id="tree-filter-host"></div>
                     <div id="map-flow"></div>
                     <div class="map-legend">
                         <div class="map-legend-item"><div class="dot" style="background:var(--accent)"></div> Folder</div>
@@ -1222,9 +1445,9 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
             <div class="so-wrap">
                 <div class="so-bar">
                     <div class="so-scenes">
-                        <button class="so-scn active" data-scene="replay">Story Replay</button>
+                        <button class="so-scn active" data-scene="universe">Universe</button>
                         <button class="so-scn" data-scene="orbit">Orbit</button>
-                        <button class="so-scn" data-scene="universe">Universe</button>
+                        <button class="so-scn" data-scene="replay">Story Replay</button>
                     </div>
                     <button id="so-play" class="so-btn">Pause</button>
                     <input id="so-scrub" type="range" min="0" max="100" value="0">
@@ -1265,6 +1488,15 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
     const score = {{SCORE_DATA}};
     const projectName = {{PROJECT_NAME}};
 
+    // Every string below comes from events.jsonl / PROJECT_MAP.md — i.e. from
+    // git commit messages, CI output and AI agents. None of it is trusted, and
+    // most of it lands in innerHTML. Escape at the sink, always.
+    function pmEsc(v) {
+        return String(v == null ? '' : v)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     // Compact number formatting so big stats fit the cards: 10k+ -> K, 1M+ -> M,
     // 1B+ -> B. Below 10,000 keep the exact comma-grouped value (and decimals,
     // e.g. USD). One decimal, trailing .0 dropped: 70000->70K, 12500->12.5K,
@@ -1297,6 +1529,7 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
     function activateTab(name) {
         document.querySelectorAll('.nav').forEach(t => t.classList.toggle('active', t.dataset.panel === name));
         document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
+        if (name === 'story' && typeof smRender === 'function') requestAnimationFrame(smRender);
     }
     document.querySelectorAll('.nav').forEach(n => n.addEventListener('click', () => activateTab(n.dataset.panel)));
     (function brand() {
@@ -1316,7 +1549,11 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
     // ══════════════════════════════════════════
     // TAB 0: OVERVIEW — all four at a glance
     // ══════════════════════════════════════════
-    document.querySelectorAll('.ov-jump').forEach(j => j.addEventListener('click', () => activateTab(j.dataset.go)));
+    // Delegated: some .ov-jump links (the Case-files footer) are rendered later.
+    document.addEventListener('click', ev => {
+        const j = ev.target.closest('.ov-jump[data-go]');
+        if (j) activateTab(j.dataset.go);
+    });
 
     const OV_NOISE = /__pycache__|\\.pyc$|\\.DS_Store|\\.egg-info/;
 
@@ -1336,7 +1573,7 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
         el.innerHTML = ranked.map((d,i) => {
             const short = d.f.split('/').slice(-2).join('/');
             const w = Math.max((d.effort/maxEffort)*100, 6);
-            return '<div class="ov-row"><div class="fn" title="'+d.f+'">'+short+'</div>'
+            return '<div class="ov-row"><div class="fn" title="'+pmEsc(d.f)+'">'+pmEsc(short)+'</div>'
                 + '<div class="ov-bar"><i id="ovb-'+i+'" style="width:0%;background:'+heat(d.fails)+'"></i></div>'
                 + '<div class="n">'+(d.fails>0?'<b>'+d.fails+'</b> failed':'active')+'</div></div>';
         }).join('') + '<div class="ov-legend"><span><span class="ov-sw" style="background:linear-gradient(90deg,#FBD9CF,#E8593B)"></span>more failed attempts</span>'
@@ -1364,39 +1601,460 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
         document.getElementById('ov-gauge-g').innerHTML = s;
     })();
 
-    // ── 3. Project Map: compact node graph ──
-    (function ovMap() {
-        const svgEl = document.getElementById('ov-map');
-        const W = Math.max(svgEl.getBoundingClientRect().width || 540, 300), H = 232, pad = 26;
-        if (!projectMapGraph.nodes.length) {
-            svgEl.innerHTML = '<text x="'+(W/2)+'" y="'+(H/2)+'" text-anchor="middle" fill="#8A99AD" font-size="12.5">Run <tspan font-family="monospace" fill="#5A6B82">pjm map</tspan> to generate a project map.</text>';
+    // ── 3. Case files: issue -> attempts -> fix ──
+    // The one screen no rules file or chat-history tool can draw: a problem,
+    // the approaches that did NOT work, and the one that did.
+    function pmCases() {
+        const byId = {};
+        timelineData.forEach(e => { if (e.issue_id) { (byId[e.issue_id] = byId[e.issue_id] || []).push(e); } });
+        return Object.keys(byId).map(id => {
+            const evs = byId[id].slice().sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+            const issue = evs.filter(e => e.type === 'issue')[0];
+            const fixes = evs.filter(e => e.type === 'fix');
+            const attempts = evs.filter(e => e.type === 'attempt');
+            const knowledge = evs.filter(e => e.type === 'decision' || e.type === 'note');
+            const located = evs.filter(e => e.location)[0];
+            return {
+                id: id, evs: evs, issue: issue, fix: fixes[fixes.length - 1],
+                attempts: attempts, knowledge: knowledge,
+                failed: attempts.filter(a => a.outcome === 'failed').length,
+                loc: located ? located.location : '',
+                t0: new Date(evs[0].timestamp), t1: new Date(evs[evs.length - 1].timestamp)
+            };
+        }).sort((a,b) => b.t1 - a.t1);
+    }
+    const CASES = pmCases();
+    const CASE_BY_ID = {};
+    CASES.forEach(c => { CASE_BY_ID[c.id] = c; });
+
+    function pmDate(d) {
+        return isNaN(d) ? '' : d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+    }
+
+    (function ovCases() {
+        const grid = document.getElementById('cw-grid');
+        const closed = CASES.filter(c => c.fix).length;
+        document.getElementById('cw-count').textContent =
+            CASES.length ? closed + ' closed · ' + CASES.length + ' total' : 'no cases yet';
+        if (!CASES.length) {
+            grid.innerHTML = '<div class="ov-empty">No cases yet — run <span class="cm-tag">pjm log "what broke"</span> ' +
+                'or let your agent call <span class="cm-tag">log_issue</span> to open the first one.</div>';
             return;
         }
-        const failByFile = {}; data.nodes.forEach(n => { if (n.type==='file' && n.failures>0) failByFile[n.id]=n.failures; });
-        const deg = {}; projectMapGraph.links.forEach(l => { const s=l.source.id||l.source, t=l.target.id||l.target; deg[s]=(deg[s]||0)+1; deg[t]=(deg[t]||0)+1; });
-        const cap = [...projectMapGraph.nodes].sort((a,b)=>(deg[b.id]||0)-(deg[a.id]||0)).slice(0,10);
-        const capIds = new Set(cap.map(n=>n.id));
-        const mlinks = projectMapGraph.links
-            .map(l => ({ source:l.source.id||l.source, target:l.target.id||l.target }))
-            .filter(l => capIds.has(l.source) && capIds.has(l.target));
-        const sim = d3.forceSimulation(cap)
-            .force('charge', d3.forceManyBody().strength(-210))
-            .force('link', d3.forceLink(mlinks).id(d=>d.id).distance(52))
-            .force('center', d3.forceCenter(W/2, H/2))
-            .force('collide', d3.forceCollide(24))
-            .stop();
-        for (let i=0;i<200;i++) sim.tick();
-        cap.forEach(n => { n.x=Math.max(pad,Math.min(W-pad,n.x)); n.y=Math.max(pad,Math.min(H-pad,n.y)); });
-        const R = n => n.type==='folder' ? 13 : 9;
-        let s = '';
-        mlinks.forEach(l => { const a=cap.find(n=>n.id===l.source), b=cap.find(n=>n.id===l.target); if(a&&b) s+='<line x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'" stroke="#CBD7E6" stroke-width="2"/>'; });
-        cap.forEach(n => {
-            if (failByFile[n.id]) s += '<circle cx="'+n.x+'" cy="'+n.y+'" r="'+(R(n)+5)+'" fill="none" stroke="#E8593B" stroke-width="2.5" stroke-dasharray="3 3"/>';
-            s += '<circle cx="'+n.x+'" cy="'+n.y+'" r="'+R(n)+'" fill="'+(n.type==='folder'?'#1F6FEB':'#169F84')+'"/>';
-            const lbl = (n.label||'').slice(0,16);
-            s += '<text class="ovn-label" x="'+n.x+'" y="'+(n.y+R(n)+13)+'" text-anchor="middle">'+lbl+'</text>';
+        grid.innerHTML = CASES.slice(0, 6).map(c => {
+            const chain = ['<span class="cpill cp-issue">ISSUE</span>'];
+            if (c.attempts.length) {
+                chain.push('<span class="arw">→</span><span class="cpill cp-try">' + c.attempts.length +
+                           (c.attempts.length === 1 ? ' TRIED' : ' TRIED') + '</span>');
+            }
+            chain.push('<span class="arw">→</span>' + (c.fix
+                ? '<span class="cpill cp-fix">FIXED</span>'
+                : '<span class="cpill cp-open">OPEN</span>'));
+            const head = c.issue ? c.issue.summary : (c.evs[0] ? c.evs[0].summary : '');
+            return '<div class="cw" data-case="' + pmEsc(c.id) + '"><span class="go">open ↗</span>' +
+                '<div class="cid">CASE ' + pmEsc(c.id) + '</div>' +
+                '<div class="prob">' + pmEsc(head) + '</div>' +
+                '<div class="chain">' + chain.join('') + '</div>' +
+                (c.loc ? '<div class="file">' + pmEsc(c.loc) + '</div>' : '') +
+                '</div>';
+        }).join('');
+        const ruled = CASES.reduce((n,c) => n + c.failed, 0);
+        document.getElementById('cw-foot').innerHTML =
+            '<span><b>' + closed + '</b> cases closed</span>' +
+            (ruled
+                ? '<span><b>' + ruled + '</b> approaches ruled out</span>'
+                : '<span><b>' + CASES.reduce((n,c) => n + c.attempts.length, 0) + '</b> approaches tried</span>') +
+            '<span><b>' + timelineData.filter(e => e.type === 'decision').length + '</b> decisions</span>' +
+            '<span><b>' + timelineData.filter(e => e.type === 'note').length + '</b> gotchas</span>' +
+            (CASES.length > 6 ? '<span class="ov-jump" data-go="timeline" style="margin-left:auto">all ' + CASES.length + ' in Timeline ↗</span>' : '');
+        grid.addEventListener('click', ev => {
+            const card = ev.target.closest('.cw');
+            if (card) openCase(card.dataset.case);
         });
-        svgEl.innerHTML = s;
+    })();
+
+    // ── Case modal — mounted once, opened from Overview AND Timeline ──
+    const cmBack = document.createElement('div');
+    cmBack.className = 'cm-back';
+    cmBack.innerHTML = '<div class="cm"><div class="cm-h"><div class="t" id="cm-t"></div>' +
+        '<div style="display:flex;align-items:center;gap:12px"><div class="d" id="cm-d"></div>' +
+        '<button class="cm-x" id="cm-x" title="Close">✕</button></div></div>' +
+        '<div id="cm-warn"></div><div class="cm-b" id="cm-b"></div><div class="cm-f" id="cm-f"></div></div>';
+    document.body.appendChild(cmBack);
+    document.getElementById('cm-x').addEventListener('click', closeCase);
+    cmBack.addEventListener('click', ev => {
+        const more = ev.target.closest('[data-openfile]');
+        if (more) openFile(more.dataset.openfile);
+    });
+    cmBack.addEventListener('click', e => { if (e.target === cmBack) closeCase(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCase(); });
+    function closeCase() { cmBack.classList.remove('on'); }
+
+    const PM_STYLE = {
+        issue:    { c:'var(--error)',   g:'!', k:'Issue' },
+        attempt:  { c:'var(--warning)', g:'↻', k:'Attempt' },
+        fix:      { c:'var(--success)', g:'✓', k:'Fix' },
+        decision: { c:'var(--primary)', g:'◆', k:'Decision' },
+        note:     { c:'var(--accent)',  g:'●', k:'Gotcha' }
+    };
+
+    function pmSteps(evs) {
+        return evs.map(e => {
+            const st = PM_STYLE[e.type] || { c:'var(--text-muted)', g:'·', k:e.type };
+            const worked = e.outcome === 'worked', failed = e.outcome === 'failed';
+            const label = st.k + (failed ? ' — failed' : worked ? ' — worked' : '');
+            let glyph = st.g, col = st.c;
+            if (e.type === 'attempt') {
+                glyph = worked ? '✓' : failed ? '✕' : '↻';
+                col = worked ? 'var(--success)' : failed ? 'var(--warning)' : 'var(--text-muted)';
+            }
+            return '<div class="cm-step"><div class="cm-dot" style="background:' + col + '">' + glyph + '</div>' +
+                '<div><div class="cm-k" style="color:' + col + '">' + pmEsc(label) + '</div>' +
+                '<div class="cm-s">' + pmEsc(e.summary) +
+                (e.location ? ' <span class="cm-tag">' + pmEsc(e.location) + '</span>' : '') + '</div></div></div>';
+        }).join('');
+    }
+
+    function pmShow(title, meta, stepsHtml, footHtml, bannerHtml) {
+        document.getElementById('cm-t').textContent = title;
+        document.getElementById('cm-d').textContent = meta;
+        document.getElementById('cm-warn').innerHTML = bannerHtml || '';
+        document.getElementById('cm-b').innerHTML = stepsHtml;
+        document.getElementById('cm-f').innerHTML = footHtml;
+        cmBack.classList.add('on');
+    }
+
+    function openCase(id) {
+        const c = CASE_BY_ID[id];
+        if (!c) return;
+        const where = c.loc ? c.loc.split('/').slice(-1)[0].split(' ')[0] : '';
+        const span = pmDate(c.t0) + (pmDate(c.t1) !== pmDate(c.t0) ? ' → ' + pmDate(c.t1) : '');
+        const foot = c.failed
+            ? '<b style="color:var(--error)">⚠ ' + c.failed + ' failed approach' + (c.failed === 1 ? '' : 'es') +
+              ' on record</b><span>— your agent is warned before trying ' + (c.failed === 1 ? 'it' : 'either') + ' again.</span>'
+            : (c.fix ? '<b style="color:var(--success)">✓ Closed</b><span>— the fix is in memory; the next session starts from it.</span>'
+                     : '<b style="color:var(--warning)">◷ Still open</b><span>— no fix recorded yet.</span>');
+        pmShow('Case ' + id + (where ? ' · ' + where : ''),
+               span + ' · ' + c.evs.length + ' events', pmSteps(c.evs), foot);
+    }
+
+    // A standalone event (a decision or gotcha with no case) opens on its own.
+    function openEvent(e) {
+        const st = PM_STYLE[e.type] || { k:e.type };
+        const d = new Date(e.timestamp);
+        const when = pmDate(d) + (isNaN(d) ? '' : ' · ' + d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }));
+        pmShow(st.k, when, pmSteps([e]),
+            '<span>Standalone ' + st.k.toLowerCase() + ' — not attached to a case.</span>');
+    }
+
+    // ══════════════════════════════════════════
+    // TAB 1: STORY MAP — Treemap (default) · Lanes · Graph
+    // ══════════════════════════════════════════
+    // One file's whole history, grouped from event locations. This is what
+    // precheck_file answers on the CLI; here it is, drawn.
+    function pmFileKey(loc) {
+        if (!loc) return null;
+        // Locations are free text ("src/a.ts:12 (and b)", "src/a.ts, src/b.ts"),
+        // so trim the separators off or the same file splits into several tiles.
+        let p = String(loc).split(' ')[0].split(':')[0].trim();
+        while (p.length && ',.;)]'.indexOf(p.slice(-1)) > -1) p = p.slice(0, -1);
+        return (p.indexOf('/') > -1 || p.indexOf('.') > -1) ? p : null;
+    }
+    const FILE_STORIES = (function () {
+        const m = {};
+        timelineData.forEach(e => {
+            const k = pmFileKey(e.location);
+            if (k) { (m[k] = m[k] || []).push(e); }
+        });
+        return Object.keys(m).map(k => {
+            const evs = m[k].slice().sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+            const c = {};
+            evs.forEach(e => { c[e.type] = (c[e.type] || 0) + 1; });
+            return { path:k, n:evs.length, c:c, evs:evs,
+                     friction:(c.issue || 0) + (c.attempt || 0),
+                     failed:evs.filter(e => e.outcome === 'failed').length };
+        }).sort((a,b) => b.n - a.n || b.friction - a.friction);
+    })();
+    const FILE_BY_PATH = {};
+    FILE_STORIES.forEach(f => { FILE_BY_PATH[f.path] = f; });
+    // Tints of the issue red, so the map reads against the event legend.
+    const smHeat = f => f.friction >= 3 ? '#E8593B'
+                      : f.friction === 2 ? 'rgba(232,89,59,.55)'
+                      : f.friction === 1 ? 'rgba(232,89,59,.24)' : '#DCE6F1';
+    const smInk = f => f.friction >= 2 ? '#FFFFFF' : '#13233A';
+
+    function smSplit(items, x, y, w, h, out) {
+        if (!items.length) return out;
+        if (items.length === 1) { out.push({ f:items[0], x:x, y:y, w:w, h:h }); return out; }
+        const tot = items.reduce((n,i) => n + i.n, 0);
+        let acc = 0, k = 0;
+        for (; k < items.length - 1; k++) { acc += items[k].n; if (acc >= tot / 2) break; }
+        const ratio = acc / tot;
+        const a = items.slice(0, k + 1), b = items.slice(k + 1);
+        if (w > h) { smSplit(a, x, y, w * ratio, h, out); smSplit(b, x + w * ratio, y, w * (1 - ratio), h, out); }
+        else { smSplit(a, x, y, w, h * ratio, out); smSplit(b, x, y + h * ratio, w, h * (1 - ratio), out); }
+        return out;
+    }
+
+    function renderTreemap() {
+        const el = document.getElementById('tm-wrap');
+        const W = el.clientWidth, H = el.clientHeight;
+        if (!W || !H) return;                       // hidden pane: nothing to lay out yet
+        if (!FILE_STORIES.length) {
+            el.innerHTML = '<div class="ov-empty" style="padding:40px 24px">No file activity yet — log an issue ' +
+                'against a file (or let your agent call <span class="cm-tag">log_issue</span>) and it appears here.</div>';
+            return;
+        }
+        const items = FILE_STORIES.slice(0, 24);
+        el.innerHTML = smSplit(items, 0, 0, W, H, []).map(r => {
+            const short = r.f.path.split('/').slice(-1)[0] || r.f.path;
+            const dir = r.f.path.split('/').slice(0, -1).slice(-1)[0] || '';
+            const tight = r.w < 96 || r.h < 52;
+            return '<div class="tm-tile" data-path="' + pmEsc(r.f.path) + '" title="' + pmEsc(r.f.path) + '" ' +
+                'style="left:' + r.x + 'px;top:' + r.y + 'px;width:' + Math.max(r.w - 3, 0) + 'px;height:' +
+                Math.max(r.h - 3, 0) + 'px;background:' + smHeat(r.f) + ';color:' + smInk(r.f) + '">' +
+                '<div class="tm-fn">' + pmEsc(short) + '</div>' +
+                (tight ? '' : '<div class="tm-mt">' + r.f.n + ' events' + (dir ? ' · ' + pmEsc(dir) : '') + '</div>') +
+                '</div>';
+        }).join('');
+        const attached = FILE_STORIES.reduce((n,f) => n + f.n, 0);
+        document.getElementById('tm-foot').textContent =
+            items.length + ' of ' + FILE_STORIES.length + ' files · ' + attached + ' of ' +
+            timelineData.length + ' events are attached to a file';
+    }
+
+    // Lanes: default to the whole history, but page through it when a project
+    // has years of memory rather than squashing it all into one strip.
+    const SL_TIMES = timelineData.map(e => new Date(e.timestamp).getTime()).filter(t => !isNaN(t));
+    const SL_MIN = SL_TIMES.length ? Math.min(...SL_TIMES) : 0;
+    const SL_MAX = SL_TIMES.length ? Math.max(...SL_TIMES) : 0;
+    const DAY = 86400000;
+    let slRange = (SL_MAX - SL_MIN) > 365 * DAY ? 365 * DAY : null;   // null = all
+    let slEnd = SL_MAX;
+
+    function renderLanes() {
+        const rows = document.getElementById('sl-rows');
+        if (!FILE_STORIES.length) {
+            rows.innerHTML = '<div class="ov-empty">No file activity yet.</div>';
+            document.getElementById('sl-axis').innerHTML = '';
+            return;
+        }
+        const t1 = slRange ? slEnd : SL_MAX;
+        const t0 = slRange ? t1 - slRange : SL_MIN;
+        const span = Math.max(t1 - t0, 1);
+        const inWin = e => { const t = new Date(e.timestamp).getTime(); return !isNaN(t) && t >= t0 && t <= t1; };
+        const files = FILE_STORIES.filter(f => f.evs.some(inWin)).slice(0, 14);
+        rows.innerHTML = files.map(f => {
+            const dots = f.evs.filter(inWin).map(e => {
+                const t = new Date(e.timestamp).getTime();
+                return '<span class="sl-pt" title="' + pmEsc(e.type + ' · ' + (e.summary || '').slice(0, 100)) +
+                    '" style="left:' + (2 + ((t - t0) / span) * 96) + '%;background:' + (PM_STYLE[e.type] || {}).c + '"></span>';
+            }).join('');
+            const iss = f.c.issue || 0;
+            return '<div class="sl-row" data-path="' + pmEsc(f.path) + '"><div class="sl-fp">' + pmEsc(f.path) + '</div>' +
+                '<div class="sl-track">' + dots + '</div><div class="sl-rt">' + f.n + ' events' +
+                (iss ? ' · <b>' + iss + ' issue' + (iss === 1 ? '' : 's') + '</b>' : '') + '</div></div>';
+        }).join('') || '<div class="ov-empty">Nothing in this window — widen the range.</div>';
+        const fmt = ms => new Date(ms).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'2-digit' });
+        const ticks = []; for (let i = 0; i < 6; i++) ticks.push(fmt(t0 + span * i / 5));
+        document.getElementById('sl-axis').innerHTML = ticks.map(t => '<span>' + t + '</span>').join('');
+        const shown = FILE_STORIES.reduce((n,f) => n + f.evs.filter(inWin).length, 0);
+        const total = FILE_STORIES.reduce((n,f) => n + f.n, 0);
+        document.getElementById('sl-legend').innerHTML =
+            ['issue','attempt','fix','decision','note'].map(k =>
+                '<span><i class="sm-sw rnd" style="background:' + PM_STYLE[k].c + '"></i>' +
+                (k === 'note' ? 'gotcha' : k) + '</span>').join('') +
+            '<span style="margin-left:auto">' + files.length + ' files · ' + shown +
+            (shown < total ? ' of ' + total : '') + ' events in view</span>';
+        // range controls
+        const opts = [[30 * DAY,'30d'], [90 * DAY,'90d'], [365 * DAY,'12m']]
+            .filter(o => o[0] < (SL_MAX - SL_MIN));
+        const atStart = slRange ? (slEnd - slRange) <= SL_MIN : true;
+        const atEnd = slRange ? slEnd >= SL_MAX : true;
+        document.getElementById('sl-range').innerHTML =
+            (slRange ? '<button class="sm-chip" data-nav="-1"' + (atStart ? ' disabled' : '') + '>◀</button>' : '') +
+            opts.map(o => '<button class="sm-chip' + (slRange === o[0] ? ' on' : '') + '" data-range="' + o[0] + '">' + o[1] + '</button>').join('') +
+            '<button class="sm-chip' + (slRange ? '' : ' on') + '" data-range="0">All</button>' +
+            (slRange ? '<button class="sm-chip" data-nav="1"' + (atEnd ? ' disabled' : '') + '>▶</button>' : '');
+    }
+
+    document.getElementById('sl-range').addEventListener('click', ev => {
+        const b = ev.target.closest('.sm-chip'); if (!b || b.disabled) return;
+        if (b.dataset.range !== undefined) { slRange = +b.dataset.range || null; slEnd = SL_MAX; }
+        else if (b.dataset.nav) { slEnd = Math.min(SL_MAX, Math.max(SL_MIN + (slRange || 0), slEnd + (+b.dataset.nav) * (slRange || 0) / 2)); }
+        renderLanes();
+    });
+    document.getElementById('tm-wrap').addEventListener('click', ev => {
+        const t = ev.target.closest('.tm-tile'); if (t) openFile(t.dataset.path);
+    });
+    document.getElementById('sl-rows').addEventListener('click', ev => {
+        const r = ev.target.closest('.sl-row'); if (r) openFile(r.dataset.path);
+    });
+
+    // The dossier — precheck_file, rendered.
+    const FILE_KINDS = {
+        failed:    { t:'failed attempts', f:e => e.type === 'attempt' && e.outcome === 'failed' },
+        attempts:  { t:'attempts',        f:e => e.type === 'attempt' },
+        fixed:     { t:'fixes',           f:e => e.type === 'fix' },
+        issues:    { t:'issues',          f:e => e.type === 'issue' },
+        decisions: { t:'decisions',       f:e => e.type === 'decision' },
+        notes:     { t:'gotchas',         f:e => e.type === 'note' }
+    };
+    // Resolve a graph node to the file story built from event locations.
+    function fileKeyFor(n) {
+        return [n.full_path, n.path, n.id].find(k => k && FILE_BY_PATH[k]) || null;
+    }
+
+    function openFile(path, kind) {
+        const f = FILE_BY_PATH[path];
+        if (!f) return;
+        const K = kind && FILE_KINDS[kind];
+        const evs = K ? f.evs.filter(K.f) : f.evs;
+        if (!evs.length) return;
+        if (K) {
+            pmShow(path, evs.length + ' ' + K.t + ' · of ' + f.n + ' events on this file',
+                pmSteps(evs),
+                '<span>Showing ' + K.t + ' only.</span>' +
+                '<span style="margin-left:auto;color:var(--primary);font-weight:700;cursor:pointer" ' +
+                'data-openfile="' + pmEsc(path) + '">Full file history ↗</span>');
+            return;
+        }
+        const first = new Date(f.evs[0].timestamp), last = new Date(f.evs[f.evs.length - 1].timestamp);
+        const weeks = Math.max(1, Math.round((last - first) / (7 * DAY)));
+        const iss = f.c.issue || 0, notes = f.c.note || 0;
+        const banner = (iss || f.failed || notes)
+            ? '<div class="cm-warn"><b>Before you touch this file:</b> ' +
+              (f.failed ? f.failed + ' approach' + (f.failed === 1 ? '' : 'es') + ' already failed here. ' : '') +
+              (iss ? iss + ' issue' + (iss === 1 ? '' : 's') + ' opened against it. ' : '') +
+              (notes ? notes + ' gotcha' + (notes === 1 ? '' : 's') + ' recorded. ' : '') +
+              'Your agent gets this same brief from <span class="cm-tag">precheck_file</span>.</div>'
+            : '';
+        pmShow(path,
+            f.n + ' events · ' + pmDate(first) + ' → ' + pmDate(last) + ' · ' + weeks + ' week' + (weeks === 1 ? '' : 's') + ' of history',
+            pmSteps(f.evs),
+            '<span>Every event recorded against this file, oldest first.</span>',
+            banner);
+    }
+
+    // View switching — treemap and lanes need a visible pane to measure.
+    let smView = 'tree';
+    function smRender() {
+        if (smView === 'tree') renderTreemap();
+        else if (smView === 'lanes') renderLanes();
+    }
+    document.querySelectorAll('.sm-toggle .map-view-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.sm-toggle .map-view-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            smView = btn.dataset.smview;
+            const panel = document.getElementById('panel-story');
+            panel.classList.remove('sm-tree', 'sm-lanes', 'sm-graph');
+            panel.classList.add('sm-' + smView);
+            smRender();
+        });
+    });
+    let smResize;
+    window.addEventListener('resize', () => { clearTimeout(smResize); smResize = setTimeout(smRender, 180); });
+
+    // ── Memory Card: the shareable hero ──
+    (function ovShare() {
+        const v = score.value || {};
+        const closed = CASES.filter(c => c.fix).length;
+        const ruled = CASES.reduce((n,c) => n + c.failed, 0);
+        const times = timelineData.map(e => new Date(e.timestamp).getTime()).filter(t => !isNaN(t));
+        const days = times.length ? Math.max(1, Math.round((Math.max(...times) - Math.min(...times)) / 86400000)) : 0;
+        const tokens = fmtNum(v.tokens_saved || 0);
+        const hours = '~' + (v.debugging_hours_saved || 0).toFixed(0) + 'h';
+        const grade = score.grade || '—';
+        const gcol = (score.score || 0) >= 85 ? '#169F84' : (score.score || 0) >= 70 ? '#1F6FEB'
+                   : (score.score || 0) >= 50 ? '#E8A33B' : '#E8593B';
+
+        document.getElementById('mc-proj').textContent = projectName;
+        document.getElementById('mc-sub').textContent = timelineData.length + ' events · ' + days + ' days of memory';
+        document.getElementById('mc-grade').textContent = grade;
+        document.getElementById('mc-score').textContent = (score.score || 0) + '/100';
+        document.getElementById('mc-grade-ring').style.borderColor = gcol;
+        document.getElementById('mc-tok').textContent = tokens;
+        document.getElementById('mc-hrs').textContent = hours;
+        document.getElementById('mc-cases').textContent = closed;
+        const quote = ruled
+            ? '“' + ruled + ' failed approach' + (ruled === 1 ? '' : 'es') + ' on record — my agent gets warned before it repeats any of them.”'
+            : closed
+            ? '“' + closed + ' case' + (closed === 1 ? '' : 's') + ' closed and remembered — my next session starts where the last one ended.”'
+            : '“' + timelineData.length + ' event' + (timelineData.length === 1 ? '' : 's') +
+              ' of project memory — my agent opens every session with the context instead of a blank slate.”';
+        document.getElementById('mc-quote').textContent = quote;
+
+        // Post to X — the user clicks it; nothing is sent from here.
+        const tweet = 'projectmem has saved ' + tokens + ' tokens and ~' + (v.debugging_hours_saved || 0).toFixed(0) +
+            'h on ' + projectName + ' — local-first memory for AI coding agents. Prevention grade ' + grade + '.';
+        document.getElementById('mc-x').href =
+            'https://x.com/intent/post?text=' + encodeURIComponent(tweet) + '&url=' + encodeURIComponent('https://projectmem.dev');
+
+        // README badge — static shields values, generated from these numbers.
+        document.getElementById('mc-badge').addEventListener('click', function () {
+            const md = '[![projectmem](https://img.shields.io/badge/memory-projectmem-1F6FEB)]' +
+                '(https://github.com/riponcm/projectmem) ' +
+                '[![prevention ' + grade + '](https://img.shields.io/badge/prevention-' +
+                encodeURIComponent(grade + ' (' + (score.score || 0) + '/100)') + '-' + gcol.replace('#','') + ')]' +
+                '(https://projectmem.dev)';
+            const done = () => { this.innerHTML = '<span class="ic">✓</span> Copied to clipboard'; setTimeout(() => {
+                this.innerHTML = '<span class="ic">⌘</span> Copy README badge'; }, 1800); };
+            if (navigator.clipboard) { navigator.clipboard.writeText(md).then(done, done); }
+            else { done(); }
+        });
+
+        // PNG — drawn on a canvas at social size. No upload, no third party.
+        document.getElementById('mc-png').addEventListener('click', function () {
+            const W = 1200, H = 630, cv = document.createElement('canvas');
+            cv.width = W; cv.height = H;
+            const x = cv.getContext('2d');
+            const bg = x.createLinearGradient(0, 0, W, H);
+            bg.addColorStop(0, '#0B2A4A'); bg.addColorStop(0.55, '#123B66'); bg.addColorStop(1, '#0E2F52');
+            x.fillStyle = bg; x.fillRect(0, 0, W, H);
+            const glow = x.createRadialGradient(W * 0.88, 40, 10, W * 0.88, 40, 520);
+            glow.addColorStop(0, 'rgba(31,111,235,0.42)'); glow.addColorStop(1, 'rgba(31,111,235,0)');
+            x.fillStyle = glow; x.fillRect(0, 0, W, H);
+            const F = 'Inter, -apple-system, Helvetica, sans-serif';
+            x.fillStyle = '#EAF2FD'; x.font = '800 62px ' + F; x.textBaseline = 'alphabetic';
+            x.fillText(projectName, 78, 156);
+            x.fillStyle = '#9DBBE0'; x.font = '500 25px ui-monospace, Menlo, monospace';
+            x.fillText(timelineData.length + ' events · ' + days + ' days of memory', 78, 200);
+            // grade ring
+            const gx = W - 178, gy = 150, gr = 74;
+            x.beginPath(); x.arc(gx, gy, gr, 0, Math.PI * 2);
+            x.fillStyle = 'rgba(22,159,132,0.12)'; x.fill();
+            x.lineWidth = 7; x.strokeStyle = gcol; x.stroke();
+            x.fillStyle = gcol; x.font = '800 62px ' + F; x.textAlign = 'center';
+            x.fillText(grade, gx, gy + 16);
+            x.fillStyle = '#9DBBE0'; x.font = '600 20px ' + F;
+            x.fillText((score.score || 0) + '/100', gx, gy + 48);
+            x.textAlign = 'left';
+            // stats
+            const stats = [[tokens, 'TOKENS SAVED'], [hours, 'HOURS SAVED'], [String(closed), 'CASES CLOSED']];
+            stats.forEach((st, i) => {
+                const sx = 78 + i * 300;
+                x.fillStyle = '#EAF2FD'; x.font = '800 78px ' + F; x.fillText(st[0], sx, 366);
+                x.fillStyle = '#9DBBE0'; x.font = '700 20px ' + F; x.fillText(st[1], sx, 402);
+            });
+            // rule + quote
+            x.strokeStyle = 'rgba(255,255,255,0.14)'; x.lineWidth = 2;
+            x.beginPath(); x.moveTo(78, 470); x.lineTo(W - 78, 470); x.stroke();
+            x.fillStyle = '#C9DDF5'; x.font = '500 26px ' + F;
+            const words = quote.split(' ');
+            let line = '', ly = 522;
+            words.forEach(w => {
+                if (x.measureText(line + w + ' ').width > W - 380) { x.fillText(line, 78, ly); line = w + ' '; ly += 38; }
+                else { line += w + ' '; }
+            });
+            x.fillText(line, 78, ly);
+            x.fillStyle = '#7FB2F2'; x.font = '700 24px ui-monospace, Menlo, monospace';
+            x.textAlign = 'right'; x.fillText('projectmem.dev', W - 78, 560); x.textAlign = 'left';
+            const a = document.createElement('a');
+            a.download = projectName + '-projectmem-card.png';
+            a.href = cv.toDataURL('image/png');
+            a.click();
+        });
     })();
 
     // ── 4. Timeline: swimlanes ──
@@ -1407,7 +2065,7 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
             { key:'fix',      c:'#169F84' },
             { key:'decision', c:'#1F6FEB' },
         ];
-        const dated = timelineData.map(e => ({ type:e.type, t:new Date(e.timestamp).getTime() }))
+        const dated = timelineData.map((e,i) => ({ type:e.type, t:new Date(e.timestamp).getTime(), i:i }))
             .filter(e => !isNaN(e.t));
         const wrap = document.getElementById('ov-timeline');
         if (!dated.length) { wrap.innerHTML = '<div class="ov-empty">No dated events yet.</div>'; document.getElementById('ov-foot').textContent=''; return; }
@@ -1415,15 +2073,29 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
         const span = Math.max(tMax - tMin, 1);
         const xOf = t => 2 + ((t - tMin)/span)*96;
         wrap.innerHTML = lanes.map(L => {
-            let pts = dated.filter(e => e.type === L.key).map(e => xOf(e.t));
+            let pts = dated.filter(e => e.type === L.key).map(e => ({ x:xOf(e.t), i:e.i }));
             if (pts.length > 46) { const step=Math.ceil(pts.length/46); pts = pts.filter((_,i)=>i%step===0); }
-            const dots = pts.map(x => '<span class="ov-ev" style="left:'+x+'%;background:'+L.c+'"></span>').join('');
+            const dots = pts.map(p => {
+                const e = timelineData[p.i];
+                const cased = e.issue_id && CASE_BY_ID[e.issue_id];
+                return '<span class="ov-ev" data-ev="'+p.i+'" title="'+pmEsc((e.summary||'').slice(0,110))+'"'
+                    + ' style="left:'+p.x+'%;background:'+L.c+'"></span>';
+            }).join('');
             return '<div class="ov-lane"><div class="ln" style="color:'+L.c+'">'+L.key+'</div><div class="ov-track">'+dots+'</div></div>';
         }).join('');
         // axis: 6 evenly spaced dates
         const fmt = ms => new Date(ms).toLocaleDateString('en-US',{month:'short', day:'numeric'});
         const ticks = []; for (let i=0;i<6;i++) ticks.push(fmt(tMin + span*i/5));
         document.getElementById('ov-axis').innerHTML = ticks.map(t => '<span>'+t+'</span>').join('');
+        // A dot is the event: open its case if it has one, else the event itself.
+        wrap.addEventListener('click', ev => {
+            const dot = ev.target.closest('.ov-ev[data-ev]');
+            if (!dot) return;
+            const e = timelineData[+dot.dataset.ev];
+            if (!e) return;
+            if (e.issue_id && CASE_BY_ID[e.issue_id]) openCase(e.issue_id);
+            else openEvent(e);
+        });
         document.getElementById('ov-foot').innerHTML = lanes.map(L =>
             '<span><span class="ov-sw" style="width:11px;height:11px;border-radius:50%;background:'+L.c+'"></span>'+L.key+'</span>').join('')
             + '<span style="margin-left:auto">'+timelineData.length+' events · '+fmt(tMin)+' – '+fmt(tMax)+'</span>';
@@ -1796,12 +2468,12 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
             const typeLabel = d.synthetic_type
                 ? (d.synthetic_type === 'directory_bubble' ? 'DIRECTORY' : 'FILE')
                 : (d.event_type ? d.event_type.toUpperCase() : (d.type || '').toUpperCase());
-            const details = d.summary || d.full_path || d.path || d.id || '';
+            const details = pmEsc(d.summary || d.full_path || d.path || d.id || '');
             const count = d.event_count ? '<br/><span style="color:var(--primary)">'+d.event_count+' attached events</span>' : '';
             const failures = d.failure_count ? '<br/><span style="color:var(--error)">'+d.failure_count+' failed attempts</span>' : '';
-            const outcome = d.outcome ? '<br/><span style="color:'+(d.outcome==='failed'?'var(--error)':'var(--success)')+'">Outcome: '+d.outcome+'</span>' : '';
-            const loc = d.location ? '<br/><span style="color:var(--accent)">@ '+d.location+'</span>' : '';
-            tt.innerHTML = '<strong>'+typeLabel+': '+(d.display_label || d.label || d.id)+'</strong><br/>'+details+count+failures+outcome+loc;
+            const outcome = d.outcome ? '<br/><span style="color:'+(d.outcome==='failed'?'var(--error)':'var(--success)')+'">Outcome: '+pmEsc(d.outcome)+'</span>' : '';
+            const loc = d.location ? '<br/><span style="color:var(--accent)">@ '+pmEsc(d.location)+'</span>' : '';
+            tt.innerHTML = '<strong>'+pmEsc(typeLabel)+': '+pmEsc(d.display_label || d.label || d.id)+'</strong><br/>'+details+count+failures+outcome+loc;
             tt.style.left = (event.pageX + 14) + "px";
             tt.style.top = (event.pageY - 14) + "px";
         }
@@ -1972,7 +2644,7 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
         const srcLabels = { manual:'Manual', git_post_commit:'Git Commits', git_post_revert:'Git Reverts', git_post_merge:'Git Merges', churn_detector:'Churn Alerts', ci_parser:'CI Results', auto_unknown:'Auto (other)' };
         srcData.forEach(([key,val]) => {
             const pct = ((val/srcTotal)*100).toFixed(0);
-            srcLegend.innerHTML += '<div class="roi-donut-item"><div class="roi-donut-dot" style="background:'+(srcColors[key]||'#64748b')+'"></div><div class="roi-donut-name">'+(srcLabels[key]||key)+'</div><div class="roi-donut-val">'+pct+'%</div></div>';
+            srcLegend.innerHTML += '<div class="roi-donut-item"><div class="roi-donut-dot" style="background:'+(srcColors[key]||'#64748b')+'"></div><div class="roi-donut-name">'+pmEsc(srcLabels[key]||key)+'</div><div class="roi-donut-val">'+pct+'%</div></div>';
         });
     }
 
@@ -2003,7 +2675,7 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
             const row = document.createElement('div');
             row.className = 'churn-row animate-in';
             row.style.animationDelay = (0.2+i*0.05)+'s';
-            row.innerHTML = '<div class="churn-file" title="'+file+'">'+shortFile+'</div><div class="churn-bar-track"><div class="churn-bar-fill '+severity+'" style="width:0%"></div></div><div class="churn-count">'+count+'</div><div class="churn-severity '+severity+'">'+severity+'</div>';
+            row.innerHTML = '<div class="churn-file" title="'+pmEsc(file)+'">'+pmEsc(shortFile)+'</div><div class="churn-bar-track"><div class="churn-bar-fill '+severity+'" style="width:0%"></div></div><div class="churn-count">'+count+'</div><div class="churn-severity '+severity+'">'+severity+'</div>';
             churnEl.appendChild(row);
             setTimeout(() => { row.querySelector('.churn-bar-fill').style.width = pct+'%'; }, 400+i*60);
         });
@@ -2119,13 +2791,17 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
     // TAB 3: Project Map
     // ══════════════════════════════════════════
     function renderMarkdown(md) {
+        // PROJECT_MAP.md is written by AI agents from repo content — escape the
+        // whole document up front so only the tags this function emits can ever
+        // reach innerHTML.
+        md = pmEsc(md);
         // Pull fenced ``` blocks out FIRST so their backticks/indentation don't collide
         // with the inline-code and paragraph rules below (they'd render as empty <code>
         // boxes + a stray trailing ``). Restored as <pre> at the end.
         const fences = [];
         md = md.replace(/```[\\w-]*\\n?([\\s\\S]*?)```/g, function (_, code) {
-            const esc = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            fences.push('<pre class="md-pre">' + esc.replace(/\\n$/, '') + '</pre>');
+            // md was escaped on entry, so `code` is already HTML-safe here.
+            fences.push('<pre class="md-pre">' + code.replace(/\\n$/, '') + '</pre>');
             return '@@FENCE' + (fences.length - 1) + '@@';
         });
         let html = md
@@ -2149,7 +2825,11 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
         const mH = window.innerHeight - 56;
         const mG = mSvg.append("g");
 
-        const mZoom = d3.zoom().scaleExtent([0.15,4]).on("zoom", e => mG.attr("transform",e.transform));
+        // Pin the zoom extent to mW/mH. The Project Map tab is hidden at load,
+        // so #map-canvas measures 0x0 and d3's default extent is degenerate —
+        // interpolateZoom over a zero-width view yields translate(NaN,NaN).
+        const mZoom = d3.zoom().extent([[0,0],[mW,mH]]).scaleExtent([0.15,4])
+            .on("zoom", e => mG.attr("transform",e.transform));
         mSvg.call(mZoom);
 
         // Arrow marker
@@ -2205,7 +2885,7 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
         mNode.on("mouseover", (event,d) => {
             const tt = document.getElementById("tooltip");
             tt.style.opacity=1;
-            tt.innerHTML = '<strong>'+d.type.toUpperCase()+'</strong><br/>'+d.full_path
+            tt.innerHTML = '<strong>'+pmEsc(d.type).toUpperCase()+'</strong><br/>'+pmEsc(d.full_path)
                 + ((d.failure_count||0) ? '<br/><span style="color:#E8593B">'+d.failure_count+' failed attempts</span>' : '');
             tt.style.left=(event.pageX+14)+"px";
             tt.style.top=(event.pageY-14)+"px";
@@ -2221,12 +2901,17 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
         // Fit the whole structure graph into view once the layout settles, so
         // nodes (incl. the hot files) never spread off-screen.
         function mFit() {
-            const xs = projectMapGraph.nodes.map(n=>n.x), ys = projectMapGraph.nodes.map(n=>n.y);
-            if (!xs.length) return;
+            // Only nodes the simulation has already positioned: a single
+            // undefined x turns Math.min into NaN, and the zoom transition then
+            // writes translate(NaN,NaN) scale(NaN) on every frame.
+            const xs = projectMapGraph.nodes.map(n=>n.x).filter(Number.isFinite);
+            const ys = projectMapGraph.nodes.map(n=>n.y).filter(Number.isFinite);
+            if (!xs.length || !ys.length) return;
             const minx=Math.min(...xs), maxx=Math.max(...xs), miny=Math.min(...ys), maxy=Math.max(...ys);
             const w=(maxx-minx)||1, h=(maxy-miny)||1, pad=64;
             const k=Math.min((mW-2*pad)/w, (mH-2*pad)/h, 1.5);
             const tx=(mW-k*(minx+maxx))/2, ty=(mH-k*(miny+maxy))/2;
+            if (!Number.isFinite(k) || !Number.isFinite(tx) || !Number.isFinite(ty)) return;
             mSvg.transition().duration(450).call(mZoom.transform, d3.zoomIdentity.translate(tx,ty).scale(k));
         }
         mSim.on("end", mFit);
@@ -2236,73 +2921,128 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
     // ══════════════════════════════════════════
     // TAB 3b: Project Map — Tree / Dendrogram view
     // ══════════════════════════════════════════
+    let treeSelectedDirs = null;
+    const treeDirOf = id => {
+        const p = String(id).split('/').filter(Boolean);
+        return p.length > 1 ? p.slice(0, -1).join('/') + '/' : '(root)';
+    };
+
     function buildTreeData() {
         if (!projectMapGraph.nodes.length) return null;
-        // Build a 3-level hierarchy: root → top-folder → leaf
-        const root = { id: '__root__', label: 'project', children: [] };
-        const groups = {};
+        // Full nested hierarchy — every path segment becomes a level, so a
+        // directory like api/ keeps its subtree instead of collapsing to a leaf.
         const palette = ['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ec4899','#06b6d4','#84cc16','#ef4444','#a78bfa','#22d3ee','#fb7185','#4ade80'];
-        let colorIdx = 0;
-
+        const root = { id:'__root__', label:projectName || 'project', children:[], _kids:{} };
+        function child(parent, seg, path, isDir) {
+            if (!parent._kids[seg]) {
+                const node = { id:path, full:path, label:seg, dir:isDir, children:[], _kids:{} };
+                parent._kids[seg] = node;
+                parent.children.push(node);
+            }
+            const n = parent._kids[seg];
+            if (isDir) n.dir = true;
+            return n;
+        }
         projectMapGraph.nodes.forEach(n => {
-            const id = n.id;
-            const parts = id.split('/').filter(Boolean);
-            const top = parts[0] || '(root)';
-            if (!groups[top]) {
-                groups[top] = { id: 'g_'+top, label: top, color: palette[(colorIdx++) % palette.length], children: [] };
-                root.children.push(groups[top]);
-            }
-            // Only add leaf (file or last segment) — skip if it's the folder itself
-            if (n.type !== 'folder' || parts.length > 1) {
-                const leafLabel = n.label || parts[parts.length-1];
-                groups[top].children.push({ id, label: leafLabel, color: groups[top].color, full: id });
-            }
+            const raw = String(n.id);
+            const parts = raw.split('/').filter(Boolean);
+            if (!parts.length) return;
+            if (treeSelectedDirs && !treeSelectedDirs.has(treeDirOf(raw))) return;
+            let cur = root, path = '';
+            parts.forEach((seg, i) => {
+                path = path ? path + '/' + seg : seg;
+                const last = i === parts.length - 1;
+                cur = child(cur, seg, path, !last || n.type === 'folder' || raw.slice(-1) === '/');
+            });
         });
-        // Sort & cap each group at 25 leaves to avoid runaway trees
-        Object.values(groups).forEach(g => {
-            g.children.sort((a,b) => a.label.localeCompare(b.label));
-            if (g.children.length > 25) {
-                const more = g.children.length - 24;
-                g.children = g.children.slice(0, 24);
-                g.children.push({ id: 'more_'+g.label, label: `+${more} more`, color: g.color, more: true });
+        const MAX_KIDS = 16;
+        (function walk(node, color, depth) {
+            delete node._kids;
+            if (!node.children.length) { delete node.children; node.color = color; return; }
+            node.color = color;
+            node.children.sort((a,b) =>
+                (b.children.length > 0) - (a.children.length > 0) || a.label.localeCompare(b.label));
+            node.children.forEach((c, i) => {
+                walk(c, depth === 0 ? palette[i % palette.length] : color, depth + 1);
+            });
+            if (node.children.length > MAX_KIDS) {
+                const more = node.children.length - (MAX_KIDS - 1);
+                node.children = node.children.slice(0, MAX_KIDS - 1);
+                node.children.push({ id:'more_' + node.id, label:'+' + more + ' more', color:color, more:true });
             }
-        });
-        root.children.sort((a,b) => a.label.localeCompare(b.label));
+        })(root, '#3b82f6', 0);
+        // Label directories with a trailing slash once the walk is done.
+        (function label(n) {
+            if (n.dir && n.label.slice(-1) !== '/') n.label += '/';
+            (n.children || []).forEach(label);
+        })(root);
         return root;
     }
 
     function renderTree() {
+        // directory checklist — same control the Flow view uses
+        const fHost = d3.select('#tree-filter-host');
+        fHost.selectAll('*').remove();
+        const fileIds = projectMapGraph.nodes.map(n => String(n.id)).filter(Boolean);
+        const dirCounts = {};
+        fileIds.forEach(id => { const d = treeDirOf(id); dirCounts[d] = (dirCounts[d] || 0) + 1; });
+        const dirNames = Object.keys(dirCounts).sort();
+        if (treeSelectedDirs === null) treeSelectedDirs = new Set(dirNames);
+        [...treeSelectedDirs].forEach(d => { if (!dirCounts[d]) treeSelectedDirs.delete(d); });
+        if (dirNames.length > 1) {
+            renderDirFilter(fHost, dirNames, dirCounts, treeSelectedDirs,
+                next => { treeSelectedDirs = next; renderTree(); });
+        }
+
         const treeData = buildTreeData();
         const tSvg = d3.select("#map-tree");
         tSvg.selectAll("*").remove();
-        if (!treeData) {
+        if (!treeData || !(treeData.children || []).length) {
             tSvg.append("text").attr("x","50%").attr("y","50%").attr("text-anchor","middle")
                 .attr("fill","var(--text-muted)").attr("font-size","13px")
-                .text("PROJECT_MAP.md is empty — no tree to render.");
+                .text(projectMapGraph.nodes.length
+                    ? "All directories hidden — enable one in the filter (top-left)."
+                    : "No project structure yet — run pjm map.");
             return;
         }
         const pane = document.querySelector('.map-graph-pane');
         const W = pane.clientWidth || 800;
         const H = pane.clientHeight || 600;
         const root = d3.hierarchy(treeData);
-        const leafCount = root.leaves().length;
-        // Vertical space per leaf, fixed min/max
-        const innerH = Math.max(H - 40, leafCount * 22);
-        const cluster = d3.cluster().size([innerH, W - 260]);
-        cluster(root);
+        // d3.tree + nodeSize (not cluster + size): the hierarchy is now as deep
+        // as the repo, so each level needs its own column and each row a fixed
+        // slot — otherwise labels from different depths land on top of each other.
+        const ROW = 19, COL = 172;
+        d3.tree().nodeSize([ROW, COL]).separation((a, b) => a.parent === b.parent ? 1 : 1.35)(root);
+        let xMin = Infinity, xMax = -Infinity;
+        root.each(d => { if (d.x < xMin) xMin = d.x; if (d.x > xMax) xMax = d.x; });
+        const innerH = Math.max(H - 40, (xMax - xMin) + 60);
+        const innerW = Math.max(W, (root.height + 1) * COL + 220);
 
-        tSvg.attr("viewBox", `0 0 ${W} ${innerH + 40}`)
-            .style("cursor","grab");
+        // Keep the viewBox at pane size and open at a readable scale — scaling a
+        // 1,400px-tall tree down to fit makes every label unreadable. Pan/zoom
+        // covers the rest.
+        tSvg.attr("viewBox", `0 0 ${W} ${H}`).style("cursor","grab");
         const zoomG = tSvg.append("g");
-        const g = zoomG.append("g").attr("transform","translate(120,20)");
+        const rootLabel = projectName || 'project';
+        const leftPad = Math.max(150, rootLabel.length * 7.5 + 34);
+        const g = zoomG.append("g").attr("transform", `translate(${leftPad},${30 - xMin})`);
 
         // Zoom + pan
         const zoom = d3.zoom()
-            .scaleExtent([0.3, 5])
+            .extent([[0, 0], [W, H]])
+            .scaleExtent([0.25, 5])
             .on("zoom", (e) => zoomG.attr("transform", e.transform))
             .on("start", () => tSvg.style("cursor","grabbing"))
             .on("end", () => tSvg.style("cursor","grab"));
-        tSvg.call(zoom).on("dblclick.zoom", () => tSvg.transition().duration(400).call(zoom.transform, d3.zoomIdentity));
+        const fitK = Math.min(1, Math.max(0.55, Math.min(W / innerW, H / (innerH + 40))));
+        // Start clear of the directory panel, or the project root label hides under it.
+        const panelW = document.querySelector('#tree-filter-host .flow-filter');
+        const clearX = panelW ? panelW.getBoundingClientRect().width + 26 : 0;
+        const fitT = d3.zoomIdentity
+            .translate(Math.max(clearX, (W - innerW * fitK) / 2), 0).scale(fitK);
+        tSvg.call(zoom).call(zoom.transform, fitT)
+            .on("dblclick.zoom", () => tSvg.transition().duration(400).call(zoom.transform, fitT));
 
         // Links — bezier curves
         const linkGen = d3.linkHorizontal().x(d=>d.y).y(d=>d.x);
@@ -2316,26 +3056,70 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
             .data(root.descendants()).enter().append("g")
             .attr("transform", d => `translate(${d.y},${d.x})`);
 
+        // A file the project has memory about is drawn from the event palette —
+        // bigger, and in the same issue-red family as the Story Map treemap.
+        const storyOf = d => (d.data.full && FILE_BY_PATH[d.data.full]) || null;
         node.append("circle")
             .attr("class","tree-node-circle")
-            .attr("r", d => d.depth === 0 ? 5 : d.depth === 1 ? 6 : 4)
-            .attr("fill", d => d.data.color || (d.depth === 0 ? '#64748b' : 'var(--primary)'));
+            .attr("r", d => {
+                const st = storyOf(d);
+                if (st) return 4.5 + Math.min(st.n, 5) * 0.9;
+                return d.depth === 0 ? 5 : d.depth === 1 ? 6 : 3.5;
+            })
+            .attr("fill", d => {
+                const st = storyOf(d);
+                // blue = the project remembers this file; warm = it fought with it
+                if (st) return st.friction >= 3 ? '#E8593B' : st.friction === 2 ? '#EC6B47'
+                                : st.friction === 1 ? '#F1956F' : '#1F6FEB';
+                if (d.depth === 0) return 'var(--navy)';            // the project itself
+                if (d.children) return d.data.color || '#64748b';   // directories keep branch colour
+                return '#C7D6E8';                                    // file with no memory: muted
+            })
+            .attr("fill-opacity", d => storyOf(d) || d.children ? 1 : 0.85)
+            .attr("stroke", d => {
+                const st = storyOf(d);
+                return st && st.friction >= 3 ? '#E8593B' : 'var(--surface)';
+            })
+            .attr("stroke-width", d => {
+                const st = storyOf(d);
+                return st && st.friction >= 3 ? 2.4 : 2;
+            });
 
         node.append("text")
             .attr("class","tree-node-label")
             .attr("dy","0.32em")
             .attr("x", d => d.children ? -10 : 10)
             .attr("text-anchor", d => d.children ? "end" : "start")
-            .attr("fill", d => d.data.more ? "var(--text-muted)" : "var(--text)")
             .style("font-style", d => d.data.more ? "italic" : "normal")
-            .text(d => d.depth === 0 ? "" : d.data.label);
+            .text(d => {
+                // The root is the project, not an unnamed dot.
+                if (d.depth === 0) return rootLabel;
+                const story = d.data.full && FILE_BY_PATH[d.data.full];
+                return d.data.label + (story ? '  · ' + story.n : '');
+            })
+            .style("font-weight", d => d.depth === 0 ? "700" : null)
+            .style("font-size", d => d.depth === 0 ? "13px" : null)
+            .attr("fill", d => d.depth === 0 ? "var(--navy)"
+                             : d.data.more ? "var(--text-muted)" : "var(--text)");
+
+        // A file with memory opens the same dossier as the Story Map.
+        node.filter(d => d.data.full && FILE_BY_PATH[d.data.full])
+            .style("cursor", "pointer")
+            .on("click", (e, d) => openFile(d.data.full));
+
+        fHost.append('div').attr('class', 'tree-legend').html(
+            '<span><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#C7D6E8;margin-right:5px;vertical-align:middle"></i>no memory</span>' +
+            '<span><i style="display:inline-block;width:11px;height:11px;border-radius:50%;background:#1F6FEB;margin-right:5px;vertical-align:middle"></i>has memory</span>' +
+            '<span><i style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#F1956F;margin-right:5px;vertical-align:middle"></i>1 issue</span>' +
+            '<span><i style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#E8593B;margin-right:5px;vertical-align:middle"></i>3+</span>' +
+            '<span style="color:var(--text-muted)">size = events · click a file for its dossier</span>');
 
         // Tooltip on full paths
         node.on("mouseover", (e,d) => {
             if (!d.data.full) return;
             const tt = document.getElementById("tooltip");
             tt.style.opacity = 1;
-            tt.innerHTML = '<strong>'+d.data.label+'</strong><br/>'+d.data.full;
+            tt.innerHTML = '<strong>'+pmEsc(d.data.label)+'</strong><br/>'+pmEsc(d.data.full);
             tt.style.left = (e.pageX + 14) + "px";
             tt.style.top = (e.pageY - 14) + "px";
         }).on("mouseout", () => { document.getElementById("tooltip").style.opacity = 0; });
@@ -2346,7 +3130,8 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
     // Directory filter selection persists across re-renders (null = show all).
     let flowSelectedDirs = null;
 
-    function renderFlowFilter(host, dirNames, counts) {
+    // Shared by Flow and Tree: a directory checklist that narrows the view.
+    function renderDirFilter(host, dirNames, counts, sel, apply) {
         const total = dirNames.reduce((a, d) => a + counts[d], 0);
         const panel = host.append('div').attr('class', 'flow-filter')
             .style('position', 'absolute').style('left', '12px').style('top', '54px').style('z-index', '6')
@@ -2375,13 +3160,13 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
                 .style('text-underline-offset', '2px').on('click', ev => { ev.stopPropagation(); onSolo(); });
             return row;
         };
-        const allOn = flowSelectedDirs.size === dirNames.length;
-        mkRow('All', total, allOn, () => { flowSelectedDirs = allOn ? new Set() : new Set(dirNames); renderMapFlow(); }, null, true);
+        const allOn = sel.size === dirNames.length;
+        mkRow('All', total, allOn, () => apply(allOn ? new Set() : new Set(dirNames)), null, true);
         dirNames.forEach(d => {
-            const on = flowSelectedDirs.has(d);
+            const on = sel.has(d);
             mkRow(d.length > 18 ? '…' + d.slice(-17) : d, counts[d], on,
-                () => { on ? flowSelectedDirs.delete(d) : flowSelectedDirs.add(d); renderMapFlow(); },
-                () => { flowSelectedDirs = new Set([d]); renderMapFlow(); });
+                () => { const next = new Set(sel); on ? next.delete(d) : next.add(d); apply(next); },
+                () => apply(new Set([d])));
         });
         panel.append('div').text('box = toggle · name = only')
             .style('font-size', '9px').style('color', 'var(--text-dim)').style('margin-top', '5px');
@@ -2403,7 +3188,10 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
         if (flowSelectedDirs === null) flowSelectedDirs = new Set(allDirNames);
         [...flowSelectedDirs].forEach(d => { if (!allDirCounts[d]) flowSelectedDirs.delete(d); });
         // filter panel (only when there's more than one directory to choose between)
-        if (allDirNames.length > 1) renderFlowFilter(host, allDirNames, allDirCounts);
+        if (allDirNames.length > 1) {
+            renderDirFilter(host, allDirNames, allDirCounts, flowSelectedDirs,
+                next => { flowSelectedDirs = next; renderMapFlow(); });
+        }
         // apply the directory filter, then rank by activity and cap the long tail
         let visFiles = srcFiles.filter(f => flowSelectedDirs.has(dirOf(f)));
         visFiles.sort((a, b) => ((b.failure_count||0)*100 + (b.event_count||0)) - ((a.failure_count||0)*100 + (a.event_count||0)));
@@ -2416,26 +3204,33 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
                                       : 'No file activity yet — log an issue or attempt against a file to see the flow.');
             return;
         }
-        // per-file activity chips from the events connected to each file
-        const evById = {};
-        data.nodes.forEach(n => { if (n.type === 'event') evById[n.id] = n; });
-        const chipStats = {};
-        fileNodes.forEach(f => { chipStats[f.id] = { failed: 0, fixed: 0, decisions: 0, notes: 0 }; });
-        data.links.forEach(l => {
-            const s = (l.source && l.source.id) || l.source, t = (l.target && l.target.id) || l.target;
-            const ev = evById[s] || evById[t];
-            const fid = evById[s] ? t : s;
-            if (!ev || !chipStats[fid]) return;
-            if (ev.event_type === 'attempt' && ev.outcome === 'failed') chipStats[fid].failed++;
-            else if (ev.event_type === 'fix') chipStats[fid].fixed++;
-            else if (ev.event_type === 'decision') chipStats[fid].decisions++;
-            else if (ev.event_type === 'note') chipStats[fid].notes++;
-        });
+        // Per-file activity, read from the same file stories the Story Map uses,
+        // so the chips here and the dossier there can never disagree — and every
+        // event type shows, not just failures and fixes.
+        const CHIP_SPEC = [
+            ['issue',    e => e.type === 'issue',                                 '#E8593B', 'issues'],
+            ['failed',   e => e.type === 'attempt' && e.outcome === 'failed',     '#E8593B', 'failed'],
+            ['tried',    e => e.type === 'attempt' && e.outcome !== 'failed',     '#E8A33B', 'attempts'],
+            ['fixed',    e => e.type === 'fix',                                   '#169F84', 'fixed'],
+            ['decision', e => e.type === 'decision',                              '#1F6FEB', 'decisions'],
+            ['gotcha',   e => e.type === 'note',                                  '#6366F1', 'notes']
+        ];
+        const PLURAL = { issue:'issues', failed:'failed', tried:'tried', fixed:'fixed',
+                         decision:'decisions', gotcha:'gotchas' };
+        function chipsFor(f) {
+            const story = FILE_BY_PATH[fileKeyFor(f) || ''];
+            if (!story) return [];
+            return CHIP_SPEC.map(spec => {
+                const n = story.evs.filter(spec[1]).length;
+                return n ? [n + ' ' + (n === 1 ? spec[0] : PLURAL[spec[0]]), spec[2], spec[3]] : null;
+            }).filter(Boolean);
+        }
         // group the visible files by parent directory
         const dirs = {};
         fileNodes.forEach(f => { const d = dirOf(f); (dirs[d] = dirs[d] || []).push(f); });
         const dirNames = Object.keys(dirs).sort();
-        const rowH = 62, dirX = 200, fileX = 400, actX = 620, memX = 830, WIDTH = 1010;
+        // wider action lane: up to four event-type chips per file
+        const rowH = 62, dirX = 200, fileX = 400, actX = 620, memX = 1010, WIDTH = 1190;
         const HEIGHT = Math.max(420, fileNodes.length * rowH + 130);
         const paneW = host.node().clientWidth || 800, paneH = host.node().clientHeight || 600;
         // "showing N of M" note (floating pill, centered)
@@ -2527,31 +3322,46 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
                 .text(dirs[d].length + (dirs[d].length > 1 ? ' files' : ' file'));
             dirs[d].forEach(f => {
                 const y = fpos[f.id], hot = (f.failure_count || 0) >= 3;
+                const fkey = fileKeyFor(f);
                 link(dirX + 145, yc, fileX, y, hot);
                 svg.append('rect').attr('x', fileX).attr('y', y - 21).attr('width', 160).attr('height', 42)
                     .attr('rx', 9).attr('fill', 'var(--surface)')
-                    .attr('stroke', hot ? 'var(--error)' : 'var(--border-light)').attr('stroke-width', hot ? 1.8 : 1);
+                    .attr('stroke', hot ? 'var(--error)' : 'var(--border-light)').attr('stroke-width', hot ? 1.8 : 1)
+                    .style('cursor', fkey ? 'pointer' : 'default')
+                    .on('click', () => { if (fkey) openFile(fkey); });
                 svg.append('text').attr('x', fileX + 13).attr('y', y - 1)
                     .attr('font-size', 12).attr('font-weight', 600).attr('fill', 'var(--text)')
                     .text((f.label || f.id).length > 19 ? (f.label || f.id).slice(0, 18) + '…' : (f.label || f.id));
                 svg.append('text').attr('x', fileX + 13).attr('y', y + 13)
                     .attr('font-size', 10).attr('fill', 'var(--text-dim)').text((f.event_count || 0) + ' events');
-                const st = chipStats[f.id];
-                const chips = [];
-                if (st.failed) chips.push([st.failed + ' failed', '#E8593B']);
-                if (st.fixed) chips.push([st.fixed + ' fixed', '#169F84']);
-                if (st.decisions) chips.push([st.decisions + ' decisions', '#6366F1']);
-                if (st.notes) chips.push([st.notes + ' notes', '#5A6B82']);
+                const chips = chipsFor(f);
                 link(fileX + 160, y, actX, y, hot);
                 let cx = actX;
-                chips.slice(0, 3).forEach(([txt, col]) => {
+                const SHOWN = 4;
+                chips.slice(0, SHOWN).forEach(([txt, col, kind]) => {
                     const w = txt.length * 6.2 + 18;
-                    svg.append('rect').attr('x', cx).attr('y', y - 12).attr('width', w).attr('height', 24)
+                    // Each chip opens the events it counts — same popup as everywhere else.
+                    const chip = svg.append('g')
+                        .style('cursor', fkey ? 'pointer' : 'default')
+                        .on('click', () => { if (fkey) openFile(fkey, kind); });
+                    chip.append('rect').attr('x', cx).attr('y', y - 12).attr('width', w).attr('height', 24)
                         .attr('rx', 12).attr('fill', col + '15').attr('stroke', col);
-                    svg.append('text').attr('x', cx + w / 2).attr('y', y + 4).attr('text-anchor', 'middle')
+                    chip.append('text').attr('x', cx + w / 2).attr('y', y + 4).attr('text-anchor', 'middle')
                         .attr('font-size', 10).attr('font-weight', 700).attr('fill', col).text(txt);
+                    if (fkey) chip.append('title').text('Open the ' + txt.replace(/^\\d+ /, '') + ' on this file');
                     cx += w + 7;
                 });
+                if (chips.length > SHOWN) {
+                    const extra = chips.length - SHOWN, w = 42;
+                    const more = svg.append('g').style('cursor', fkey ? 'pointer' : 'default')
+                        .on('click', () => { if (fkey) openFile(fkey); });
+                    more.append('rect').attr('x', cx).attr('y', y - 12).attr('width', w).attr('height', 24)
+                        .attr('rx', 12).attr('fill', 'var(--surface2)').attr('stroke', 'var(--border-light)');
+                    more.append('text').attr('x', cx + w / 2).attr('y', y + 4).attr('text-anchor', 'middle')
+                        .attr('font-size', 10).attr('font-weight', 700).attr('fill', 'var(--text-dim)').text('+' + extra);
+                    more.append('title').text('Open the full history for this file');
+                    cx += w + 7;
+                }
                 if (!chips.length) {
                     svg.append('text').attr('x', actX).attr('y', y + 4)
                         .attr('font-size', 10).attr('fill', 'var(--text-dim)').text('activity logged');
@@ -2647,7 +3457,7 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
     eventTypes.forEach(type => {
         const btn = document.createElement('div');
         btn.className = 'tl-filter active';
-        btn.innerHTML = type + ' <span class="count">' + (typeCounts[type]||0) + '</span>';
+        btn.innerHTML = pmEsc(type) + ' <span class="count">' + (typeCounts[type]||0) + '</span>';
         btn.addEventListener('click', () => {
             if (activeFilters.has(type)) { activeFilters.delete(type); btn.classList.remove('active'); }
             else { activeFilters.add(type); btn.classList.add('active'); }
@@ -2699,13 +3509,14 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
             html += '<div class="tl-date-group"><div class="tl-date-label">'+date+' &middot; '+events.length+' events</div>';
             events.forEach(e => {
                 const outcomeClass = e.outcome==='failed'?'tl-outcome-failed':e.outcome==='worked'?'tl-outcome-worked':'';
-                const outcomeLabel = e.outcome?' <span class="'+outcomeClass+'">['+e.outcome+']</span>':'';
-                const loc = e.location?'<span style="color:var(--accent)"> @ '+e.location+'</span>':'';
-                const iid = e.issue_id?'<span style="color:var(--text-muted)"> #'+e.issue_id+'</span>':'';
+                const outcomeLabel = e.outcome?' <span class="'+outcomeClass+'">['+pmEsc(e.outcome)+']</span>':'';
+                const loc = e.location?'<span style="color:var(--accent)"> @ '+pmEsc(e.location)+'</span>':'';
+                const iid = e.issue_id?'<span style="color:var(--text-muted)"> #'+pmEsc(e.issue_id)+'</span>':'';
                 const autoBadge = e.auto_captured?'<span class="tl-auto-badge">AUTO</span>':'';
                 const ts = e.timestamp ? new Date(e.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '';
-                const capSrc = e.auto_captured && e.capture_source ? '<span class="tl-capture-source"> &middot; '+(srcLabels[e.capture_source]||e.capture_source)+'</span>' : '';
-                html += '<div class="tl-item"><div class="tl-badge '+e.type+'">'+e.type+'</div><div class="tl-body"><div class="tl-summary">'+e.summary+outcomeLabel+iid+autoBadge+'</div><div class="tl-meta">'+ts+loc+capSrc+'</div></div></div>';
+                const capSrc = e.auto_captured && e.capture_source ? '<span class="tl-capture-source"> &middot; '+pmEsc(srcLabels[e.capture_source]||e.capture_source)+'</span>' : '';
+                const caseAttr = e.issue_id && CASE_BY_ID[e.issue_id] ? ' data-case="'+pmEsc(e.issue_id)+'"' : '';
+                html += '<div class="tl-item'+(caseAttr?' clickable':'')+'"'+caseAttr+'><div class="tl-badge '+pmEsc(e.type)+'">'+pmEsc(e.type)+'</div><div class="tl-body"><div class="tl-summary">'+pmEsc(e.summary)+outcomeLabel+iid+autoBadge+'</div><div class="tl-meta">'+ts+loc+capSrc+'</div></div></div>';
             });
             html += '</div>';
         }
@@ -2713,6 +3524,11 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
         listEl.innerHTML = html;
     }
     renderTimeline();
+    // Any timeline row that belongs to a case opens the full chain.
+    listEl.addEventListener('click', ev => {
+        const row = ev.target.closest('.tl-item[data-case]');
+        if (row) openCase(row.dataset.case);
+    });
 
     // TAB 4b: Timeline — "Time Spine" view (default)
     // Central real-time axis; problems branch left, knowledge branches right.
@@ -2767,6 +3583,12 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
                 spineEl.classList.remove('tsp-hl');
                 body.querySelectorAll('.tsp-card').forEach(c => c.classList.remove('tsp-on'));
             });
+            // Same case chain the Overview opens — the spine is the default view,
+            // so this is where most clicks land.
+            if (r.dataset.issue && CASE_BY_ID[r.dataset.issue]) {
+                r.style.cursor = 'pointer';
+                r.addEventListener('click', () => openCase(r.dataset.issue));
+            }
         });
     }
     renderTimelineSpine();
@@ -2855,7 +3677,7 @@ VIZ_TEMPLATE = """<!DOCTYPE html>
         }
 
         // ── state ──
-        let sceneName = 'replay', playing = true, speed = 1, sel = null, t0 = performance.now();
+        let sceneName = 'universe', playing = true, speed = 1, sel = null, t0 = performance.now();
         let raf = null, last = 0, inited = false;
         function isActive() { return panel.classList.contains('active'); }
         function speedNow() { return speed * (sel ? 0.2 : 1); }
