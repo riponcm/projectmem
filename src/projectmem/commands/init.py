@@ -565,6 +565,25 @@ def _print_mcp_config(root: Path, single_project: bool = False) -> None:
     typer.echo("    }")
     typer.echo("")
     if not single_project:
+        # Upgraders are the ones most likely to get this wrong: their client
+        # still holds a --root entry from an older release, so a newly inited
+        # repo is invisible to it until that entry is replaced.
+        try:
+            from projectmem.project_registry import projects as _registered
+
+            others = [p for p in _registered() if p.path != root]
+        except Exception:
+            others = []
+        if others:
+            typer.echo(
+                f"  You already have {len(others)} other project(s) registered. "
+                "Replacing an"
+            )
+            typer.echo(
+                "  older \"--root\" entry with the config above serves all of "
+                "them from one server."
+            )
+            typer.echo("")
         typer.echo(f"  This project is registered as '{root.name}'. Your AI can")
         typer.echo("  pass project=\"<name>\" on any call, or you can set a default:")
         typer.echo(f"    pjm project use {root.name}")
