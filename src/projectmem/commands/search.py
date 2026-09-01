@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 
 from projectmem.models import superseded_ids
@@ -7,7 +9,12 @@ from projectmem.search import search_events
 from projectmem.storage import read_events
 
 
-def run(query: str, regex: bool = False, failed_only: bool = False) -> None:
+def run(
+    query: str,
+    regex: bool = False,
+    failed_only: bool = False,
+    root: Path | None = None,
+) -> None:
     """Plain-text or regex search across events.
 
     By default this is a case-insensitive substring match. Use ``--regex``
@@ -32,7 +39,7 @@ def run(query: str, regex: bool = False, failed_only: bool = False) -> None:
             typer.echo("No matches.")
         return
 
-    retired = superseded_ids(read_events())
+    retired = superseded_ids(read_events(root))
     for event in matches:
         issue = f" #{event.issue_id}" if event.issue_id else ""
         outcome = f" ({event.outcome})" if event.outcome else ""

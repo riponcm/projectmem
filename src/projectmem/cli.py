@@ -20,6 +20,7 @@ from projectmem.commands import log as log_command
 from projectmem.commands import map as map_command
 from projectmem.commands import note as note_command
 from projectmem.commands import precheck as precheck_command
+from projectmem.commands.project import project_app
 from projectmem.commands import regenerate as regenerate_command
 from projectmem.commands import score as score_command
 from projectmem.commands import search as search_command
@@ -37,6 +38,7 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+app.add_typer(project_app, name="project")
 
 
 @app.callback()
@@ -53,6 +55,7 @@ def init(
     no_claude_md: bool = typer.Option(False, "--no-claude-md", help="Skip writing/updating the CLAUDE.md bridge block."),
     no_stack_detect: bool = typer.Option(False, "--no-stack-detect", help="Skip auto-populating PROJECT_MAP.md from detected stack."),
     no_mcp_config: bool = typer.Option(False, "--no-mcp-config", help="Skip printing the MCP client config block at the end."),
+    mcp_config_single: bool = typer.Option(False, "--mcp-config-single", help="Print the pinned single-project MCP config instead of the shared one."),
     no_structure: bool = typer.Option(False, "--no-structure", help="Skip building the code-structure cache (.projectmem/structure.json)."),
     global_tags: str | None = typer.Option(None, "--global-tags", help="Only inherit matching tags (comma-separated)."),
 ) -> None:
@@ -61,6 +64,7 @@ def init(
         no_hooks=no_hooks, no_global=no_global, no_watch=no_watch,
         no_backfill=no_backfill, no_claude_md=no_claude_md,
         no_stack_detect=no_stack_detect, no_mcp_config=no_mcp_config,
+        mcp_config_single=mcp_config_single,
         no_structure=no_structure, global_tags=global_tags,
     )
 

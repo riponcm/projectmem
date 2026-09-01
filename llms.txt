@@ -41,7 +41,7 @@ it — as opposed to decay-based pruning or in-place fact rewriting.
   plus distilled `summary.md`, `PROJECT_MAP.md`, `plan.md`
 - **Cross-project store:** `~/.projectmem/global/` for library gotchas that carry
   between repositories
-- **MCP server:** 15 tools, verified end-to-end on Claude Desktop, Cursor,
+- **MCP server:** 17 tools, verified end-to-end on Claude Desktop, Cursor,
   Antigravity and Codex
 - **Network use:** none. The MCP server is a stdio subprocess your AI client
   spawns. The only optional server is `pjm dashboard --serve`, an ephemeral

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 
 from projectmem.models import Event
@@ -29,6 +31,7 @@ def run(
     location: str | None = None,
     issue: str | None = None,
     auto_issue: bool = False,
+    root: Path | None = None,
 ) -> Event:
     """Record an attempt on the active issue.
 
@@ -49,13 +52,13 @@ def run(
     if len(selected) > 1:
         raise ProjectMemError("Use only one of --worked, --failed, or --partial.")
 
-    events = read_events()
+    events = read_events(root)
 
     issue_id: str | None = None
     if issue:
         issue_id = issue.lstrip("#")
     else:
-        issue_id = read_current_issue() or latest_open_issue_within(
+        issue_id = read_current_issue(root) or latest_open_issue_within(
             events, minutes=AUTO_ATTACH_WINDOW_MINUTES
         )
 
@@ -73,11 +76,12 @@ def run(
                 type="issue",
                 issue_id=new_id,
                 summary=text,
-                git_commit=get_git_commit(),
+                git_commit=get_git_commit(root),
                 location=location,
-            )
+            ),
+            root,
         )
-        write_current_issue(new_id)
+        write_current_issue(new_id, root)
         issue_id = new_id
 
     outcome = selected[0] if selected else "partial"
@@ -86,10 +90,10 @@ def run(
         issue_id=issue_id,
         summary=text,
         outcome=outcome,
-        git_commit=get_git_commit(),
+        git_commit=get_git_commit(root),
         location=location,
     )
-    append_event(event)
-    regenerate_summary()
+    append_event(event, root)
+    regenerate_summary(root)
     typer.echo(f"Recorded {outcome} attempt on #{issue_id}")
     return event

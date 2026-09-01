@@ -199,18 +199,31 @@ def test_detect_main_folders(tmp_path: Path) -> None:
 def test_print_mcp_config_contains_expected_pieces(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    # Default since 0.3.0: one server for every registered project, so the
+    # config deliberately carries no --root.
     _print_mcp_config(tmp_path / "myproj")
     out = capsys.readouterr().out
     assert '"mcpServers"' in out
     assert '"projectmem"' in out
     assert '"-m", "projectmem.mcp_server"' in out
-    assert f'--root", "{tmp_path / "myproj"}"' in out
+    assert "--root" not in out
+    assert "pjm project use myproj" in out
     # All 4 client paths should be mentioned.
     assert "Claude Desktop" in out
     assert "Cursor" in out
     assert "Antigravity" in out
     assert "Codex" in out
     assert "config.toml" in out  # Codex TOML note
+
+
+def test_print_mcp_config_single_project_still_pins_the_root(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--mcp-config-single` keeps the pinned form for one-repo setups."""
+    _print_mcp_config(tmp_path / "myproj", single_project=True)
+    out = capsys.readouterr().out
+    assert f'--root", "{tmp_path / "myproj"}"' in out
+    assert "this project only" in out
 
 
 def test_print_mcp_config_uses_absolute_python(
