@@ -581,3 +581,33 @@ def test_cloud_folders_are_included_by_default(tmp_path, monkeypatch):
     from projectmem.commands.doctor import default_roots
 
     assert home / "OneDrive - Some University" in default_roots()
+
+
+def test_cloud_roots_are_deduped_by_what_they_resolve_to(tmp_path, monkeypatch):
+    """~/OneDrive - X and ~/Library/CloudStorage/OneDrive-X are one folder."""
+    home = tmp_path / "home"
+    real = home / "Library" / "CloudStorage" / "OneDrive-Uni"
+    real.mkdir(parents=True)
+    (home / "OneDrive - Uni").symlink_to(real)
+    monkeypatch.setenv("HOME", str(home))
+
+    from projectmem.commands.doctor import default_roots
+
+    roots = default_roots()
+    resolved = [r.resolve() for r in roots]
+
+    assert resolved.count(real.resolve()) == 1
+
+
+def test_several_cloud_clients_are_covered(tmp_path, monkeypatch):
+    """Not everyone uses OneDrive."""
+    home = tmp_path / "home"
+    for name in ["Dropbox", "Nextcloud", "iCloudDrive", "Box", "MEGA"]:
+        (home / name).mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+
+    from projectmem.commands.doctor import default_roots
+
+    names = {r.name for r in default_roots()}
+
+    assert {"Dropbox", "Nextcloud", "iCloudDrive", "Box", "MEGA"} <= names

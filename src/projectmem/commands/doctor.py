@@ -37,6 +37,46 @@ _HOME_DIRS = [
 ]
 
 
+# Cloud clients, by where each one actually puts its folder.
+_CLOUD_PATTERNS = [
+    "OneDrive*",                                   # personal and business, all OSes
+    "Dropbox*",
+    "Google Drive*", "GoogleDrive*", "gdrive",     # older clients and Linux mounts
+    "Library/CloudStorage/*",                      # macOS: OneDrive, Google, Box, Dropbox
+    "Library/Mobile Documents/com~apple~CloudDocs",  # iCloud Drive on macOS
+    "iCloudDrive*",                                # iCloud on Windows
+    "Nextcloud*", "ownCloud*",
+    "Box", "Box Sync",
+    "MEGA*", "pCloud*", "Sync",
+    "Seafile*", "Yandex.Disk*",
+]
+
+
+def _windows_fixed_drives() -> list[Path]:
+    """Fixed drives only.
+
+    A mapped network drive that is offline can make a plain exists() check hang
+    for a long time on a corporate laptop, so ask Windows what kind of drive
+    each one is first. Falls back to a plain check if that is unavailable.
+    """
+    letters = [f"{c}:/" for c in string.ascii_uppercase]
+    try:
+        import ctypes
+
+        DRIVE_FIXED = 3
+        get_type = ctypes.windll.kernel32.GetDriveTypeW  # type: ignore[attr-defined]
+        return [Path(d) for d in letters if get_type(d) == DRIVE_FIXED]
+    except Exception:
+        out = []
+        for d in letters:
+            try:
+                if Path(d).exists():
+                    out.append(Path(d))
+            except OSError:
+                continue
+        return out
+
+
 def default_roots() -> list[Path]:
     """Likely code locations for this machine.
 
@@ -47,21 +87,34 @@ def default_roots() -> list[Path]:
     home = Path.home()
     roots = [home / name for name in _HOME_DIRS]
     # Cloud-synced folders hold real work — on a managed Windows or Mac,
-    # Documents and Desktop are often redirected into OneDrive entirely.
-    for pattern in ("OneDrive*", "Dropbox*", "Google Drive*", "Library/CloudStorage/*"):
+    # Documents and Desktop are often redirected into OneDrive wholesale.
+    # Listing these is cheap even for online-only files: we stat directories,
+    # never read file contents, so nothing is pulled down from the cloud.
+    for pattern in _CLOUD_PATTERNS:
         try:
             roots.extend(sorted(home.glob(pattern)))
         except OSError:
             continue
     if sys.platform.startswith("win"):
-        for letter in string.ascii_uppercase:
-            drive = Path(f"{letter}:/")
-            try:
-                if drive.exists() and letter != "C":
-                    roots.append(drive)
-            except OSError:  # disconnected network drive
+        # C: is covered by the home-directory entries above; scanning it whole
+        # would mean walking Windows and Program Files for nothing.
+        roots.extend(d for d in _windows_fixed_drives() if d != Path("C:/"))
+    # Cloud folders are often reachable by two names (~/OneDrive - X and
+    # ~/Library/CloudStorage/OneDrive-X are the same place), so dedupe by what
+    # they resolve to rather than scanning the same tree twice.
+    seen: set[Path] = set()
+    unique: list[Path] = []
+    for root in roots:
+        try:
+            if not root.is_dir():
                 continue
-    return [r for r in roots if r.is_dir()]
+            real = root.resolve()
+        except OSError:
+            continue
+        if real not in seen:
+            seen.add(real)
+            unique.append(root)
+    return unique
 
 
 def run(fix: bool = False, depth: int = 4, roots: list[Path] | None = None) -> None:
