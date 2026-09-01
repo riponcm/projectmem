@@ -135,9 +135,11 @@ def test_two_usable_roots_is_an_error_not_a_coin_flip(tmp_path, monkeypatch):
 
 
 def test_nothing_selected_refuses_rather_than_guessing(tmp_path, monkeypatch):
+    """With more than one candidate, no selection is an error — never a pick."""
     monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "home"))
     monkeypatch.chdir(tmp_path)
     reg.register(_project(tmp_path, "alpha"))
+    reg.register(_project(tmp_path, "beta"))
 
     with pytest.raises(ResolutionError):
         resolve()
@@ -215,6 +217,7 @@ def test_write_without_a_project_fails_visibly(tmp_path, monkeypatch):
     monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "home"))
     monkeypatch.chdir(tmp_path)
     reg.register(_project(tmp_path, "alpha"))
+    reg.register(_project(tmp_path, "beta"))
 
     import projectmem.mcp_server as server
 
@@ -225,3 +228,21 @@ def test_write_without_a_project_fails_visibly(tmp_path, monkeypatch):
     assert "No project selected" in result
     events = (tmp_path / "alpha" / ".projectmem" / "events.jsonl").read_text(encoding="utf-8")
     assert "unrouted" not in events
+
+
+def test_a_single_registered_project_needs_no_selection(tmp_path, monkeypatch):
+    """The common case: one repo, shared config, no `pjm project use`."""
+    monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "home"))
+    monkeypatch.chdir(tmp_path)
+    alpha = _project(tmp_path, "alpha")
+    reg.register(alpha)
+
+    resolution = resolve()
+
+    assert resolution.root == alpha
+    assert resolution.source == "only"
+
+    # …and the moment a second project exists, it stops assuming
+    reg.register(_project(tmp_path, "beta"))
+    with pytest.raises(ResolutionError):
+        resolve()

@@ -14,7 +14,10 @@ Precedence, highest first:
   3. Roots offered by the MCP client, when exactly one resolves.
   4. The active project (``pjm project use``).
   5. Walking up from the working directory, like git.
-  6. Nothing — an error naming the registered projects.
+  6. The only registered project, when there is exactly one. Not a guess —
+     with a single project there is only one possible answer, and it keeps the
+     common single-repo setup working with no configuration at all.
+  7. Nothing — an error naming the registered projects.
 
 Rules 3 and 4 are the reversal of the original draft, and the reason is the
 failure this whole layer exists to prevent: a client root is where the
@@ -42,7 +45,7 @@ class ResolutionError(RuntimeError):
 @dataclass(frozen=True)
 class Resolution:
     root: Path
-    source: str  # explicit | pinned | roots | active | cwd
+    source: str  # pinned | explicit | roots | active | cwd | only
     name: str
 
     def describe(self) -> str:
@@ -157,7 +160,14 @@ def resolve(
             root=root, source="cwd", name=record.name if record else root.name
         )
 
-    # 6. refuse to guess
+    # 6. exactly one registered project — not a guess, there is only one answer.
+    #    Without this, someone who inits a single repo and pastes the shared
+    #    config gets "No project selected" on their very first call, which is a
+    #    terrible introduction to a tool that is supposed to remember things.
+    if len(registry.projects) == 1:
+        return _from_record(registry.projects[0], "only")
+
+    # 7. refuse to guess
     raise ResolutionError(
         "No project selected. Pass project=\"<name>\", or run `pjm project use "
         f"<name>` to set an active one. Registered: {_known()}"

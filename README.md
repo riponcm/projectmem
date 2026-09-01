@@ -297,6 +297,21 @@ the pinned config, and an existing `--root` entry keeps working exactly as befor
 
 **For:** Claude Desktop, Cursor, Antigravity, Codex — and any tool with native MCP support. The MCP server forces the AI to read memory and log every action automatically.
 
+**Since 0.3.0 you configure this once, not once per repository.** The block below has no `--root`: the server serves every project you have registered, and each call resolves its own. Paste it, and every repo you `pjm init` from then on is reachable — no second entry, no restart.
+
+```json
+"mcpServers": {
+  "projectmem": {
+    "command": "/opt/anaconda3/bin/python",
+    "args": ["-m", "projectmem.mcp_server"]
+  }
+}
+```
+
+With one project registered, that is the whole setup — there is only one place a call can go. With several, your AI passes `project="<name>"`, or you set a default with `pjm project use <name>`. `pjm init` prints this block with your own Python path already filled in.
+
+**Upgrading from 0.2.x?** Your existing `--root` entry keeps working exactly as before, and a pinned server now refuses to write outside its own repo even if asked. Replace it with the block above when you want one server for everything.
+
 ### The 3-minute workflow (let your AI do the setup)
 
 1. **Install + init.** `pip install projectmem`, then `cd` into your project and run `pjm init` — or simply ask your AI to run it.
@@ -334,6 +349,23 @@ Paste this block:
 "mcpServers": {
   "projectmem": {
     "command": "/opt/anaconda3/bin/python",
+    "args": ["-m", "projectmem.mcp_server"]
+  }
+}
+```
+
+**Two things to know about this block:**
+
+- **Use the absolute path to `python`** (e.g. `/opt/anaconda3/bin/python`, or run `which python` to find yours). Claude Desktop subprocesses don't inherit your shell `PATH`, so bare `"python"` often fails.
+- **You no longer need the `cwd` field, and you never could rely on it.** Claude Desktop's current build (with the Epitaxy / Cowork workspace system) silently ignores `cwd` — the server ends up running with `cwd=/` and can't find `.projectmem/`. That is why older releases needed `--root`. The registry replaces it: the server finds projects by name, not by where it happens to be running.
+
+<details>
+<summary>Pin this server to a single repo instead</summary>
+
+```json
+"mcpServers": {
+  "projectmem": {
+    "command": "/opt/anaconda3/bin/python",
     "args": [
       "-m", "projectmem.mcp_server",
       "--root", "/absolute/path/to/your/project"
@@ -342,10 +374,8 @@ Paste this block:
 }
 ```
 
-**Two things to know about this block:**
-
-- **Use the absolute path to `python`** (e.g. `/opt/anaconda3/bin/python`, or run `which python` to find yours). Claude Desktop subprocesses don't inherit your shell `PATH`, so bare `"python"` often fails.
-- **We pass the project root via `--root`, not the `cwd` JSON field.** Claude Desktop's current build (with the Epitaxy / Cowork workspace system) silently ignores the `cwd` field — the server ends up running with `cwd=/` and can't find `.projectmem/`. The `--root` flag is honored by projectmem directly (read from `sys.argv`) and works regardless of how Claude Desktop spawns the subprocess.
+A pinned server serves exactly that repository and refuses to write anywhere else, even when asked — the stricter choice if you want a hard boundary. `pjm init --mcp-config-single` prints this form.
+</details>
 
 Then **fully quit Claude Desktop (Cmd+Q on Mac)** and reopen — MCP servers only initialize on cold start.
 
@@ -361,10 +391,7 @@ Two ways to register the MCP server — pick whichever fits your workflow:
   "mcpServers": {
     "projectmem": {
       "command": "/opt/anaconda3/bin/python",
-      "args": [
-        "-m", "projectmem.mcp_server",
-        "--root", "/absolute/path/to/your/project"
-      ]
+      "args": ["-m", "projectmem.mcp_server"]
     }
   }
 }
@@ -373,7 +400,9 @@ Two ways to register the MCP server — pick whichever fits your workflow:
 **Two things to know about this block (same gotchas as Claude Desktop):**
 
 - **Use the absolute path to `python`** (run `which python` to find yours). Cursor subprocesses don't reliably inherit your shell `PATH`.
-- **Pass the project root via `--root`, not the `cwd` JSON field.** Cursor — like Claude Desktop — silently ignores `cwd`: the server ends up running with `cwd=~` and can't find `.projectmem/`. The `--root` flag is honored by projectmem directly and works around the bug.
+- **Don't bother with the `cwd` field.** Cursor — like Claude Desktop — silently ignores it: the server ends up running with `cwd=~`. Since 0.3.0 that no longer matters, because projects are found by name in the registry rather than by where the server runs.
+
+Registered globally, one entry covers every project. Per-project `.cursor/mcp.json` still works if you prefer the server to exist only when that repo is open — add `"--root", "/absolute/path/to/your/project"` to `args` there to pin it.
 
 Then **fully quit Cursor (Cmd+Q on Mac)** and reopen. projectmem also auto-discovers `.projectmem/` by walking up from CWD (like git does for `.git/`), and honors `PROJECTMEM_ROOT` and a `--root <path>` CLI argument.
 
@@ -396,14 +425,15 @@ Paste this block:
   "mcpServers": {
     "projectmem": {
       "command": "python",
-      "args": ["-m", "projectmem.mcp_server"],
-      "cwd": "/absolute/path/to/your/project"
+      "args": ["-m", "projectmem.mcp_server"]
     }
   }
 }
 ```
 
-Then **fully quit Antigravity (Cmd+Q on Mac)** and reopen — MCP servers only initialize on cold start. All 15 projectmem tools register identically to Claude Desktop / Cursor.
+Antigravity does honor the `cwd` field, so adding `"cwd": "/absolute/path/to/your/project"` works — but it ties the server to that one repo. Leave it out and the same entry serves every registered project.
+
+Then **fully quit Antigravity (Cmd+Q on Mac)** and reopen — MCP servers only initialize on cold start. All 17 projectmem tools register identically to Claude Desktop / Cursor.
 
 ### Codex
 
@@ -416,14 +446,14 @@ Append this block (preserves any existing config):
 ```toml
 [mcp_servers.projectmem]
 command = "/opt/anaconda3/bin/python"
-args = ["-m", "projectmem.mcp_server", "--root", "/absolute/path/to/your/project"]
+args = ["-m", "projectmem.mcp_server"]
 cwd = "/absolute/path/to/your/project"
 ```
 
 Three things to know about this block:
 
 - **Use the absolute path to `python`** (run `which python` to find yours). Codex subprocesses don't reliably inherit your shell `PATH`.
-- **Pass the project root via `--root` in args** (defense in depth). The `cwd` field appears to work in Codex, unlike Claude Desktop and Cursor — but `--root` costs nothing and saves us if any future Codex build regresses.
+- **You no longer need `--root` or `cwd`.** Earlier releases passed `--root` as defense in depth (the `cwd` field does appear to work in Codex, unlike Claude Desktop and Cursor). Since 0.3.0 the registry makes both unnecessary — add `"--root", "/absolute/path/to/your/project"` to `args` only if you want this server locked to a single repo.
 - **Set your reasoning effort to `medium` or higher.** On low-reasoning Codex skips `get_instructions` from the session-start trio, which can cause the AI to miss the Setup Mode workflow rules. Medium+ honors the full trio automatically.
 
 **Validate the TOML:**
