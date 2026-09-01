@@ -93,6 +93,10 @@
 > pjm doctor
 > ```
 >
+> Add `--online` if you also want it to tell you when a newer projectmem is out
+> — projectmem makes no network calls otherwise, and `--auto` turns that into a
+> once-a-day check if you prefer.
+>
 > Run it again after editing the config. It flags any client still pinned to a
 > single repo — the most common reason a new project is invisible to your agent.
 >
@@ -117,7 +121,8 @@ new session. Without it every session begins from zero.
 
 projectmem is an open-source **agent memory** layer built for that job. It is
 **local-first**: memory lives in a plain `.projectmem/` directory inside your
-repository, with no cloud, no account and no telemetry. A native **MCP server**
+repository, with no cloud, no account and no telemetry — the only network call
+it can make is an update check you turn on yourself. A native **MCP server**
 exposes 17 tools to Claude Code, Claude Desktop, Cursor, Antigravity and Codex,
 so your agent reads memory and logs its work on its own.
 
@@ -638,7 +643,7 @@ All 17 tools your AI can call. Every repo tool takes an optional
 
 | Command | Purpose |
 |---|---|
-| `pjm doctor [--fix] [--path P]` | Find unregistered projects, stale entries and pinned client configs *(new in 0.3.0)* |
+| `pjm doctor [--fix] [--path P] [--online]` | Find unregistered projects, stale entries and pinned client configs. `--online` also asks PyPI for the newest release; `--auto` remembers to check daily *(new in 0.3.0)* |
 | `pjm project list` | Every project this server can reach, and which one is active *(new in 0.3.0)* |
 | `pjm project scan <dirs> [--depth N] [--dry-run]` | Walk for projects with memory and register them |
 | `pjm project register [path] [--alias a]` | Add a project that already has memory (`pjm init` registers automatically) |

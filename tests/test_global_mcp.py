@@ -660,3 +660,52 @@ def test_dedupe_paths_uses_identity_not_text(tmp_path):
 
     assert len(dedupe_paths([real, link, real])) == 1
     assert dedupe_paths([tmp_path / "missing"]) == []
+
+
+def test_no_network_unless_asked(tmp_path, monkeypatch, capsys):
+    """The promise is no telemetry — so a version check is opt-in, always."""
+    monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    from projectmem.commands import doctor
+
+    def explode(*args, **kwargs):  # any network access fails the test
+        raise AssertionError("doctor reached the network without being asked")
+
+    monkeypatch.setattr(doctor, "latest_version", explode)
+    doctor.run(depth=1, roots=[tmp_path])
+
+    out = capsys.readouterr().out
+    assert "pjm doctor --online" in out
+
+
+def test_online_flag_reports_a_newer_release(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    from projectmem.commands import doctor
+
+    monkeypatch.setattr(doctor, "latest_version", lambda *a, **k: "99.0.0")
+    doctor.run(depth=1, roots=[tmp_path], online=True)
+
+    assert "99.0.0 is available" in capsys.readouterr().out
+
+
+def test_auto_check_is_remembered_and_can_be_turned_off(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    from projectmem.commands import doctor
+    from projectmem.project_registry import load_meta
+
+    monkeypatch.setattr(doctor, "latest_version", lambda *a, **k: "0.0.1")
+    doctor.run(depth=1, roots=[tmp_path], auto=True)
+    assert load_meta()["update_check"] is True
+
+    doctor.run(depth=1, roots=[tmp_path], auto=False)
+    assert load_meta()["update_check"] is False
+
+
+def test_version_comparison_ignores_suffixes():
+    from projectmem.commands.doctor import _as_tuple
+
+    assert _as_tuple("0.3.1") > _as_tuple("0.3.0")
+    assert _as_tuple("0.10.0") > _as_tuple("0.9.9")
+    assert _as_tuple("1.0.0rc1") == _as_tuple("1.0.0")

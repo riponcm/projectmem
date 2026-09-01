@@ -256,9 +256,14 @@ def doctor(
     fix: bool = typer.Option(False, "--fix", help="Apply the fixes, not just report them."),
     depth: int = typer.Option(4, "--depth", "-d", help="How deep to scan for projects."),
     path: list[Path] = typer.Option(None, "--path", "-p", help="Scan here instead of the usual places."),
+    online: bool = typer.Option(False, "--online", help="Also ask PyPI whether a newer projectmem exists."),
+    auto: bool = typer.Option(None, "--auto/--no-auto", help="Remember to check PyPI daily (off by default)."),
 ) -> None:
     """Check your setup: unregistered projects, stale entries, pinned configs."""
-    doctor_command.run(fix=fix, depth=depth, roots=list(path) if path else None)
+    doctor_command.run(
+        fix=fix, depth=depth, roots=list(path) if path else None,
+        online=online, auto=auto,
+    )
 
 
 @app.command("dashboard")

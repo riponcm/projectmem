@@ -417,6 +417,19 @@ def unregister(identifier: str) -> ProjectRecord:
     return record
 
 
+def load_meta(path: Path | None = None) -> dict:
+    """The sidecar as a plain dict — settings live here alongside project ids."""
+    meta = _read_json(meta_path(path or registry_path()))
+    return meta if isinstance(meta, dict) else {}
+
+
+def save_meta(meta: dict, path: Path | None = None) -> None:
+    try:
+        _write_atomic(meta_path(path or registry_path()), meta)
+    except OSError:
+        pass
+
+
 def seen_version(path: Path | None = None) -> str | None:
     """The projectmem version that last touched this registry, if any."""
     meta = _read_json(meta_path(path or registry_path()))

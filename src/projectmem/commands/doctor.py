@@ -128,8 +128,106 @@ def default_roots() -> list[Path]:
     return dedupe_paths(roots)
 
 
-def run(fix: bool = False, depth: int = 4, roots: list[Path] | None = None) -> None:
+PYPI_JSON = "https://pypi.org/pypi/projectmem/json"
+CHECK_INTERVAL_SECONDS = 24 * 3600
+
+
+def _as_tuple(version: str) -> tuple[int, ...]:
+    """Comparable form of x.y.z, ignoring any suffix. No new dependency."""
+    import itertools
+
+    parts = []
+    for chunk in version.split(".")[:3]:
+        # Leading digits only. Removing every non-digit turned "0rc1" into 01,
+        # which made 1.0.0rc1 sort ABOVE 1.0.0 and would have told someone on a
+        # final release that a release candidate was newer.
+        digits = "".join(itertools.takewhile(str.isdigit, chunk))
+        parts.append(int(digits) if digits else 0)
+    return tuple(parts)
+
+
+def latest_version(timeout: float = 3.0) -> str | None:
+    """Ask PyPI what the newest release is. Returns None on any failure.
+
+    The only network call projectmem ever makes, and it never happens on its
+    own: either --online for a one-off check, or after the user turns the check
+    on. Nothing about the machine is sent — it is a plain GET of a public JSON
+    file, the same one `pip install` reads.
+    """
+    import json as _json
+    import urllib.request
+
+    try:
+        request = urllib.request.Request(
+            PYPI_JSON, headers={"User-Agent": f"projectmem/{__version__}"}
+        )
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return _json.load(response)["info"]["version"]
+    except Exception:
+        return None
+
+
+def set_auto_check(enabled: bool) -> None:
+    """Remember whether doctor may check PyPI on its own (default: no)."""
+    from projectmem.project_registry import load_meta, save_meta
+
+    meta = load_meta()
+    meta["update_check"] = bool(enabled)
+    save_meta(meta)
+
+
+def _update_line(online: bool) -> None:
+    """Report the installed version, and the newest one when asked to look."""
+    from projectmem.project_registry import load_meta, save_meta
+
+    meta = load_meta()
+    enabled = bool(meta.get("update_check"))
+    if not (online or enabled):
+        typer.secho(f"\n  ✓ Running {__version__}", fg=typer.colors.GREEN)
+        typer.echo("      Check PyPI for a newer release:  pjm doctor --online")
+        typer.echo("      Check daily from now on:         pjm doctor --auto")
+        typer.echo("      (projectmem makes no network calls unless you ask.)")
+        return
+
+    import time
+
+    last = meta.get("update_checked_at") or 0
+    newest = meta.get("update_latest")
+    if online or (time.time() - float(last)) > CHECK_INTERVAL_SECONDS:
+        fetched = latest_version()
+        if fetched:
+            newest = fetched
+            meta["update_checked_at"] = time.time()
+            meta["update_latest"] = fetched
+            save_meta(meta)
+    if not newest:
+        typer.secho(f"\n  ✓ Running {__version__}", fg=typer.colors.GREEN)
+        typer.echo("      Could not reach PyPI — nothing else was affected.")
+        return
+    if _as_tuple(newest) > _as_tuple(__version__):
+        typer.secho(
+            f"\n  ⚠ {newest} is available (you have {__version__})",
+            fg=typer.colors.YELLOW,
+        )
+        typer.echo("      pip install -U projectmem")
+    else:
+        typer.secho(f"\n  ✓ Running {__version__} — the latest", fg=typer.colors.GREEN)
+
+
+def run(
+    fix: bool = False,
+    depth: int = 4,
+    roots: list[Path] | None = None,
+    online: bool = False,
+    auto: bool | None = None,
+) -> None:
     """Report problems; with fix=True, resolve the ones that are safe to."""
+    if auto is not None:
+        set_auto_check(auto)
+        typer.secho(
+            f"✓ Automatic update checks {'on (once a day)' if auto else 'off'}\n",
+            fg=typer.colors.GREEN,
+        )
     scan_roots = [r.expanduser().resolve() for r in roots] if roots else default_roots()
     registry = load_registry()
     known = {r.path for r in registry.projects}
@@ -203,6 +301,8 @@ def run(fix: bool = False, depth: int = 4, roots: list[Path] | None = None) -> N
         typer.echo("      projectmem never edits client settings — that one is yours to change.")
     else:
         typer.secho("\n  ✓ No MCP client config is pinned to a single repo", fg=typer.colors.GREEN)
+
+    _update_line(online)
 
     typer.echo("")
     if not problems:
