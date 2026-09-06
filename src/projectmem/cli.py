@@ -381,9 +381,10 @@ def watch(
     daemon: bool = typer.Option(False, "--daemon", help="Run in background as a daemon."),
     stop: bool = typer.Option(False, "--stop", help="Stop the running watcher."),
     status: bool = typer.Option(False, "--status", help="Show watcher status."),
+    worker: bool = typer.Option(False, "--worker", hidden=True, help="Internal background worker."),
 ) -> None:
     """Watch file activity in real-time and log churn events (opt-in)."""
-    watch_command.run(daemon=daemon, stop=stop, status=status)
+    watch_command.run(daemon=daemon, stop=stop, status=status, worker=worker)
 
 
 @app.command()
