@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from typer.testing import CliRunner
 
+from conftest import set_fake_home
 from projectmem.cli import app
 from projectmem.models import Event, resolve_event_ref, superseded_ids
 from projectmem.storage import append_event, read_events
@@ -24,7 +25,7 @@ def _init(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     # Isolate the machine-wide global store so auto-promotion from test
     # events never touches the real ~/.projectmem.
-    monkeypatch.setenv("HOME", str(tmp_path))
+    set_fake_home(monkeypatch, str(tmp_path))
     result = runner.invoke(app, ["init"], catch_exceptions=False)
     assert result.exit_code == 0
     return tmp_path
@@ -468,7 +469,7 @@ def test_walkup_discovery_skips_global_store(tmp_path, monkeypatch):
 
     workdir = home / "Documents" / "scratch"
     workdir.mkdir(parents=True)
-    monkeypatch.setenv("HOME", str(home))
+    set_fake_home(monkeypatch, str(home))
     monkeypatch.chdir(workdir)
 
     with pytest.raises(ProjectMemError):
@@ -480,7 +481,7 @@ def test_walkup_discovery_still_finds_real_projects(tmp_path, monkeypatch):
 
     project = tmp_path / "proj"
     project.mkdir()
-    monkeypatch.setenv("HOME", str(tmp_path))
+    set_fake_home(monkeypatch, str(tmp_path))
     monkeypatch.chdir(project)
     runner.invoke(app, ["init"], catch_exceptions=False)
 

@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from conftest import set_fake_home
 from projectmem import project_registry as reg
 from projectmem.cli import app
 from projectmem.resolver import ResolutionError, resolve
@@ -482,7 +483,7 @@ def test_package_version_matches_pyproject():
 def test_doctor_registers_what_it_finds(tmp_path, monkeypatch):
     """The upgrade path in one command."""
     monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "home"))
-    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    set_fake_home(monkeypatch, str(tmp_path / "fake-home"))
     work = tmp_path / "work"
     (work / "one").mkdir(parents=True)
     initialize(work / "one")
@@ -504,7 +505,7 @@ def test_doctor_registers_what_it_finds(tmp_path, monkeypatch):
 
 def test_doctor_prunes_entries_whose_memory_is_gone(tmp_path, monkeypatch):
     monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "home"))
-    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    set_fake_home(monkeypatch, str(tmp_path / "fake-home"))
     gone = tmp_path / "deleted"
     gone.mkdir()
     initialize(gone)
@@ -575,7 +576,7 @@ def test_cloud_folders_are_included_by_default(tmp_path, monkeypatch):
     """Managed machines redirect Documents and Desktop into OneDrive."""
     home = tmp_path / "home"
     (home / "OneDrive - Some University").mkdir(parents=True)
-    monkeypatch.setenv("HOME", str(home))
+    set_fake_home(monkeypatch, str(home))
     monkeypatch.setenv("USERPROFILE", str(home))
 
     from projectmem.commands.doctor import default_roots
@@ -589,7 +590,7 @@ def test_cloud_roots_are_deduped_by_what_they_resolve_to(tmp_path, monkeypatch):
     real = home / "Library" / "CloudStorage" / "OneDrive-Uni"
     real.mkdir(parents=True)
     (home / "OneDrive - Uni").symlink_to(real)
-    monkeypatch.setenv("HOME", str(home))
+    set_fake_home(monkeypatch, str(home))
 
     from projectmem.commands.doctor import default_roots
 
@@ -604,7 +605,7 @@ def test_several_cloud_clients_are_covered(tmp_path, monkeypatch):
     home = tmp_path / "home"
     for name in ["Dropbox", "Nextcloud", "iCloudDrive", "Box", "MEGA"]:
         (home / name).mkdir(parents=True)
-    monkeypatch.setenv("HOME", str(home))
+    set_fake_home(monkeypatch, str(home))
 
     from projectmem.commands.doctor import default_roots
 
@@ -665,7 +666,7 @@ def test_dedupe_paths_uses_identity_not_text(tmp_path):
 def test_no_network_unless_asked(tmp_path, monkeypatch, capsys):
     """The promise is no telemetry — so a version check is opt-in, always."""
     monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "home"))
-    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    set_fake_home(monkeypatch, str(tmp_path / "fake-home"))
     from projectmem.commands import doctor
 
     def explode(*args, **kwargs):  # any network access fails the test
@@ -680,7 +681,7 @@ def test_no_network_unless_asked(tmp_path, monkeypatch, capsys):
 
 def test_online_flag_reports_a_newer_release(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "home"))
-    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    set_fake_home(monkeypatch, str(tmp_path / "fake-home"))
     from projectmem.commands import doctor
 
     monkeypatch.setattr(doctor, "latest_version", lambda *a, **k: "99.0.0")
@@ -691,7 +692,7 @@ def test_online_flag_reports_a_newer_release(tmp_path, monkeypatch, capsys):
 
 def test_auto_check_is_remembered_and_can_be_turned_off(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "home"))
-    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    set_fake_home(monkeypatch, str(tmp_path / "fake-home"))
     from projectmem.commands import doctor
     from projectmem.project_registry import load_meta
 
@@ -709,3 +710,74 @@ def test_version_comparison_ignores_suffixes():
     assert _as_tuple("0.3.1") > _as_tuple("0.3.0")
     assert _as_tuple("0.10.0") > _as_tuple("0.9.9")
     assert _as_tuple("1.0.0rc1") == _as_tuple("1.0.0")
+
+
+# ── doctor: a fix that does not stick ────────────────────────────────────────
+#
+# Reported from a real Windows session. `pjm doctor` went green after the user
+# removed --root from Claude Desktop's config; minutes later the same command
+# reported the pin was back. Both runs were honest — that file also stores the
+# desktop app's own preferences, so the running app rewrote the whole thing from
+# the copy it loaded at startup and restored the pin.
+#
+# Doctor cannot stop that. It can notice it, using only the file it already
+# reads, and say so instead of looking flaky.
+
+def test_doctor_remembers_a_config_that_was_clean_and_is_pinned_again(
+    tmp_path, monkeypatch
+):
+    from projectmem.commands import doctor
+
+    set_fake_home(monkeypatch, tmp_path / "home")
+    monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "pm"))
+    cfg = tmp_path / "home" / ".cursor" / "mcp.json"
+    cfg.parent.mkdir(parents=True)
+    cfg.write_text("{}", encoding="utf-8")
+
+    # Seen pinned, then cleaned by the user, then pinned again by the client.
+    assert doctor._reverted_configs([("Cursor", cfg)]) == []
+    assert doctor._reverted_configs([]) == []
+    reverted = doctor._reverted_configs([("Cursor", cfg)])
+
+    assert [c for c, _ in reverted] == ["Cursor"]
+    assert reverted[0][1], "must report when it was last seen clean"
+
+
+def test_doctor_does_not_cry_revert_for_a_config_pinned_all_along(
+    tmp_path, monkeypatch
+):
+    """Pinned twice in a row is someone who has not fixed it yet, not a clobber."""
+    from projectmem.commands import doctor
+
+    set_fake_home(monkeypatch, tmp_path / "home")
+    monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "pm"))
+    cfg = tmp_path / "home" / ".cursor" / "mcp.json"
+    cfg.parent.mkdir(parents=True)
+    cfg.write_text("{}", encoding="utf-8")
+
+    assert doctor._reverted_configs([("Cursor", cfg)]) == []
+    assert doctor._reverted_configs([("Cursor", cfg)]) == []
+
+
+def test_doctor_state_survives_an_unwritable_home(tmp_path, monkeypatch):
+    """Advisory only — never fail a check because the note could not be saved."""
+    from projectmem.commands import doctor
+
+    set_fake_home(monkeypatch, tmp_path / "home")
+    monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "pm"))
+    monkeypatch.setattr(doctor, "_save_state", lambda state: (_ for _ in ()).throw(OSError))
+
+    with pytest.raises(OSError):
+        doctor._save_state({})          # the stub really does raise
+
+    monkeypatch.setattr(doctor, "_save_state", lambda state: None)
+    assert doctor._reverted_configs([("Cursor", tmp_path / "x.json")]) == []
+
+
+def test_doctor_tells_you_to_quit_the_client_before_editing(tmp_path, monkeypatch):
+    """The one-line fix for the whole failure mode."""
+    import inspect
+    from projectmem.commands import doctor
+
+    src = inspect.getsource(doctor.run)
+    assert "Quit the client completely before editing" in src

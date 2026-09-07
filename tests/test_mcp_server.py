@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 
+from conftest import set_fake_home
 from projectmem.models import Event
 from projectmem.storage import append_event, initialize
 
@@ -70,7 +71,7 @@ def _git(repo: Path, *args: str) -> None:
 
 
 def _make_git_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    set_fake_home(monkeypatch, str(tmp_path / "home"))
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init")

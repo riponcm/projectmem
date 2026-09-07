@@ -12,9 +12,11 @@ Nothing is written without --fix.
 """
 from __future__ import annotations
 
+import json
 import os
 import string
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import typer
@@ -23,6 +25,7 @@ from projectmem import __version__
 from projectmem.commands.init import _pinned_client_configs
 from projectmem.commands.project import _find_projects
 from projectmem.project_registry import (
+    registry_path,
     RegistryError,
     load_registry,
     register,
@@ -214,6 +217,64 @@ def _update_line(online: bool) -> None:
         typer.secho(f"\n  ✓ Running {__version__} — the latest", fg=typer.colors.GREEN)
 
 
+
+# ── remembering what we saw last time ────────────────────────────────────────
+#
+# Doctor is a point-in-time read of a file its owning client also writes. A user
+# can remove --root, watch doctor go green, and have the client rewrite the file
+# from the copy it loaded at startup — restoring the pin hours later. The second
+# run is just as honest as the first, and the user is left thinking the tool is
+# flaky rather than that their edit was clobbered.
+#
+# Remembering the previous verdict per config file turns that into a diagnosis,
+# using only files doctor already reads.
+
+def _state_path() -> Path:
+    return registry_path().parent / "doctor-state.json"
+
+
+def _load_state() -> dict:
+    try:
+        return json.loads(_state_path().read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_state(state: dict) -> None:
+    try:
+        path = _state_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+    except OSError:
+        pass  # advisory only — never fail a check because we could not take a note
+
+
+def _reverted_configs(pinned: list[tuple[str, Path]]) -> list[tuple[str, str]]:
+    """Configs that were clean last run and are pinned again now.
+
+    Returns (client, when_it_was_clean) so the caller can say when the edit
+    that got undone actually happened.
+    """
+    state = _load_state()
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    pinned_paths = {str(path): client for client, path in pinned}
+    reverted = []
+
+    for key, client in pinned_paths.items():
+        prev = state.get(key)
+        if prev and prev.get("pinned") is False:
+            reverted.append((client, prev.get("seen", "a previous run")))
+        state[key] = {"pinned": True, "seen": now, "client": client}
+
+    # Anything previously recorded and no longer pinned is now clean.
+    for key, entry in list(state.items()):
+        if key not in pinned_paths and entry.get("pinned") is not False:
+            state[key] = {"pinned": False, "seen": now,
+                          "client": entry.get("client", "client")}
+
+    _save_state(state)
+    return reverted
+
 def run(
     fix: bool = False,
     depth: int = 4,
@@ -299,7 +360,18 @@ def run(
             typer.echo(f"      {client}  {path}")
         typer.echo('      Remove --root / cwd / PROJECTMEM_ROOT from the projectmem entry.')
         typer.echo("      projectmem never edits client settings — that one is yours to change.")
+        # The advice above silently fails if the client is open: these files
+        # hold the app's own preferences too, so it can rewrite the whole file
+        # from memory on exit and restore the pin you just removed.
+        typer.secho("      Quit the client completely before editing, then re-run"
+                    " `pjm doctor`.", fg=typer.colors.YELLOW)
+        for client, when in _reverted_configs(pinned):
+            typer.secho(
+                f"      ! {client} was clean on {when} and is pinned again — the"
+                " app most likely rewrote this file on exit.",
+                fg=typer.colors.RED)
     else:
+        _reverted_configs([])   # record the clean state so a later revert is visible
         typer.secho("\n  ✓ No MCP client config is pinned to a single repo", fg=typer.colors.GREEN)
 
     _update_line(online)

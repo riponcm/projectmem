@@ -10,12 +10,14 @@ client-config file paths. Pure-print, but we still pin the format so
 regressions are loud.
 """
 from __future__ import annotations
+import json
 
 import io
 from pathlib import Path
 
 import pytest
 
+from conftest import set_fake_home
 from projectmem.commands import init as init_module
 from projectmem.commands.init import (
     _detect_main_folders,
@@ -205,7 +207,7 @@ def test_print_mcp_config_contains_expected_pieces(
     # Default since 0.3.0: one server for every registered project, so the
     # printed config carries no --root. HOME is redirected because the function
     # also scans real client configs, and a test must not read the developer's.
-    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    set_fake_home(monkeypatch, str(tmp_path / "fake-home"))
     _print_mcp_config(tmp_path / "myproj")
     out = capsys.readouterr().out
     assert '"mcpServers"' in out
@@ -227,7 +229,11 @@ def test_print_mcp_config_single_project_still_pins_the_root(
     """`--mcp-config-single` keeps the pinned form for one-repo setups."""
     _print_mcp_config(tmp_path / "myproj", single_project=True)
     out = capsys.readouterr().out
-    assert f'--root", "{tmp_path / "myproj"}"' in out
+    # The printed block is JSON, so the path is escaped the way json.dumps
+    # escapes it. On Windows that means doubled backslashes — asserting the raw
+    # path passes on POSIX and fails on Windows against correct output.
+    escaped = json.dumps(str(tmp_path / "myproj"))[1:-1]
+    assert f'--root", "{escaped}"' in out
     assert "this project only" in out
 
 
@@ -237,8 +243,10 @@ def test_print_mcp_config_uses_absolute_python(
     import sys
     _print_mcp_config(tmp_path)
     out = capsys.readouterr().out
-    # The command must be an absolute path (sys.executable), not bare "python".
-    assert f'"command": "{sys.executable}"' in out
+    # Absolute path (sys.executable), not bare "python" — and JSON-escaped,
+    # which is what makes this pass on Windows too.
+    escaped = json.dumps(sys.executable)[1:-1]
+    assert f'"command": "{escaped}"' in out
 
 
 def test_init_warns_when_a_client_config_still_pins_one_repo(
@@ -252,7 +260,7 @@ def test_init_warns_when_a_client_config_still_pins_one_repo(
         '"--root","/old/repo"]}}}',
         encoding="utf-8",
     )
-    monkeypatch.setenv("HOME", str(home))
+    set_fake_home(monkeypatch, str(home))
 
     _print_mcp_config(tmp_path / "myproj")
     out = capsys.readouterr().out
@@ -276,7 +284,7 @@ def test_init_detects_a_pin_set_through_the_environment(
         '"projectmem.mcp_server"],"env":{"PROJECTMEM_ROOT":"/old/repo"}}}}',
         encoding="utf-8",
     )
-    monkeypatch.setenv("HOME", str(home))
+    set_fake_home(monkeypatch, str(home))
 
     _print_mcp_config(tmp_path / "myproj")
     out = capsys.readouterr().out
@@ -289,7 +297,7 @@ def test_init_prints_the_codex_toml_form(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Codex reads TOML — printing only JSON left them to translate it."""
-    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    set_fake_home(monkeypatch, str(tmp_path / "fake-home"))
 
     _print_mcp_config(tmp_path / "myproj")
     out = capsys.readouterr().out
@@ -310,7 +318,7 @@ def test_linux_client_paths_are_scanned_and_xdg_is_honoured(
         '"--root","/old/repo"]}}}',
         encoding="utf-8",
     )
-    monkeypatch.setenv("HOME", str(home))
+    set_fake_home(monkeypatch, str(home))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
 
     _print_mcp_config(tmp_path / "myproj")
@@ -324,7 +332,7 @@ def test_printed_locations_match_the_platform(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A Linux user should not be told to look in ~/Library."""
-    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    set_fake_home(monkeypatch, str(tmp_path / "fake-home"))
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     monkeypatch.setattr(init_module.sys, "platform", "linux")
 
@@ -339,7 +347,7 @@ def test_windows_locations_use_windows_conventions(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Don't hand a Windows user a mix of %APPDATA% and ~/ paths."""
-    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    set_fake_home(monkeypatch, str(tmp_path / "fake-home"))
     monkeypatch.setattr(init_module.sys, "platform", "win32")
 
     _print_mcp_config(tmp_path / "myproj")
