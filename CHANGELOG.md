@@ -16,7 +16,7 @@
 
 - **`pjm doctor` tells you to quit the client before editing its config.** These files hold the app's own preferences too, so a running client can rewrite the whole file from the copy it loaded at startup and restore the `--root` you just removed. Doctor was giving advice that silently fails while the app is open.
 
-- **`pjm doctor` notices when a fix has been undone.** It remembers the previous verdict for each client config, so a config that was clean last run and is pinned again now gets named, with the time it was last clean — instead of looking flaky for reporting a problem you know you already fixed. Local files only; no process inspection, and nothing leaves your machine.
+- **`pjm doctor` notices when a fix has been undone.** It remembers the previous verdict for each client config, so a config that was clean last run and is pinned again now gets named, with the time it was last clean — instead of looking flaky for reporting a problem you know you already fixed. It records every config on disk that mentions projectmem, including the ones that are already fine, so the very first run after upgrading is enough to catch a clobber straight afterwards. Local files only; no process inspection, and nothing leaves your machine.
 
 ## 0.3.1
 

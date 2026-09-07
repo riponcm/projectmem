@@ -22,7 +22,10 @@ from pathlib import Path
 import typer
 
 from projectmem import __version__
-from projectmem.commands.init import _pinned_client_configs
+from projectmem.commands.init import (
+    _pinned_client_configs,
+    _projectmem_client_configs,
+)
 from projectmem.commands.project import _find_projects
 from projectmem.project_registry import (
     registry_path,
@@ -266,12 +269,22 @@ def _reverted_configs(pinned: list[tuple[str, Path]]) -> list[tuple[str, str]]:
             reverted.append((client, prev.get("seen", "a previous run")))
         state[key] = {"pinned": True, "seen": now, "client": client}
 
-    # Anything previously recorded and no longer pinned is now clean.
-    for key, entry in list(state.items()):
-        if key not in pinned_paths and entry.get("pinned") is not False:
-            state[key] = {"pinned": False, "seen": now,
-                          "client": entry.get("client", "client")}
+    # Record the clean ones too — every config on disk that mentions
+    # projectmem, not only those already in the state file.
+    #
+    # This used to iterate the state file instead, which meant a config that was
+    # clean and had never been seen before was never written down. So the very
+    # first run on a clean config recorded nothing, and a clobber straight after
+    # it went unreported: exactly the case this function exists to catch, missed
+    # for exactly the users who had not hit the problem yet.
+    for client, path, is_pinned in _projectmem_client_configs():
+        key = str(path)
+        if is_pinned or key in pinned_paths:
+            continue
+        state[key] = {"pinned": False, "seen": now, "client": client}
 
+    # Configs that have disappeared from disk stay in the file harmlessly; a
+    # client that is uninstalled and reinstalled should not read as a revert.
     _save_state(state)
     return reverted
 

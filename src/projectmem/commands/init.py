@@ -561,13 +561,13 @@ def _client_configs() -> list[tuple[str, Path]]:
     ]
 
 
-def _pinned_client_configs() -> list[tuple[str, Path]]:
-    """Client configs that still pin projectmem to one repo.
+def _projectmem_client_configs() -> list[tuple[str, Path, bool]]:
+    """Every client config that mentions projectmem, and whether it is pinned.
 
-    A 0.2.x user upgrading has `--root` (or a `cwd`) in their client config. It
-    keeps working — but only for that one repository, so a project they init
-    today is invisible to the server they already have. Detecting it is the
-    difference between "it just works" and a silent dead end.
+    One scan, two callers. `pjm doctor` needs the clean ones as well as the
+    pinned ones so it can notice a config that was clean and has been pinned
+    again — and a second scan somewhere else would drift from this one the
+    first time a client changes how it stores things.
     """
     found = []
     for name, path in _client_configs():
@@ -580,14 +580,25 @@ def _pinned_client_configs() -> list[tuple[str, Path]]:
         # Crude on purpose: JSON and TOML both, without parsing either. All
         # three pinning mechanisms count — args, cwd, and the environment
         # variable, which is how Claude Desktop configs usually do it.
-        if (
+        pinned = (
             "--root" in text
             or '"cwd"' in text
             or "cwd =" in text
             or "PROJECTMEM_ROOT" in text
-        ):
-            found.append((name, path))
+        )
+        found.append((name, path, pinned))
     return found
+
+
+def _pinned_client_configs() -> list[tuple[str, Path]]:
+    """Client configs that still pin projectmem to one repo.
+
+    A 0.2.x user upgrading has `--root` (or a `cwd`) in their client config. It
+    keeps working — but only for that one repository, so a project they init
+    today is invisible to the server they already have. Detecting it is the
+    difference between "it just works" and a silent dead end.
+    """
+    return [(name, path) for name, path, pinned in _projectmem_client_configs() if pinned]
 
 
 def _print_mcp_config(root: Path, single_project: bool = False) -> None:

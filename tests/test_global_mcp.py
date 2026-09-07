@@ -732,11 +732,18 @@ def test_doctor_remembers_a_config_that_was_clean_and_is_pinned_again(
     monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "pm"))
     cfg = tmp_path / "home" / ".cursor" / "mcp.json"
     cfg.parent.mkdir(parents=True)
-    cfg.write_text("{}", encoding="utf-8")
+    # The file has to actually mention projectmem — an unrelated config is not
+    # ours to track, and writing "{}" here made this pass for the wrong reason.
+    pinned_text = ('{"mcpServers":{"projectmem":{"args":'
+                   '["-m","projectmem.mcp_server","--root","/x"]}}}')
+    clean_text = '{"mcpServers":{"projectmem":{"args":["-m","projectmem.mcp_server"]}}}'
 
     # Seen pinned, then cleaned by the user, then pinned again by the client.
+    cfg.write_text(pinned_text, encoding="utf-8")
     assert doctor._reverted_configs([("Cursor", cfg)]) == []
+    cfg.write_text(clean_text, encoding="utf-8")
     assert doctor._reverted_configs([]) == []
+    cfg.write_text(pinned_text, encoding="utf-8")
     reverted = doctor._reverted_configs([("Cursor", cfg)])
 
     assert [c for c, _ in reverted] == ["Cursor"]
@@ -753,7 +760,8 @@ def test_doctor_does_not_cry_revert_for_a_config_pinned_all_along(
     monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "pm"))
     cfg = tmp_path / "home" / ".cursor" / "mcp.json"
     cfg.parent.mkdir(parents=True)
-    cfg.write_text("{}", encoding="utf-8")
+    cfg.write_text('{"mcpServers":{"projectmem":{"args":'
+                   '["-m","projectmem.mcp_server","--root","/x"]}}}', encoding="utf-8")
 
     assert doctor._reverted_configs([("Cursor", cfg)]) == []
     assert doctor._reverted_configs([("Cursor", cfg)]) == []
@@ -781,3 +789,52 @@ def test_doctor_tells_you_to_quit_the_client_before_editing(tmp_path, monkeypatc
 
     src = inspect.getsource(doctor.run)
     assert "Quit the client completely before editing" in src
+
+
+def test_doctor_records_a_clean_config_it_has_never_seen_before(tmp_path, monkeypatch):
+    """The blind spot: first run clean, second run clobbered.
+
+    The clean-config branch used to iterate the state file, so a config that was
+    clean and had never been recorded was never written down. The first run
+    stored nothing and a clobber straight afterwards went unreported — which is
+    exactly the case for a user whose config is fine when they upgrade, i.e.
+    everyone this feature was built for.
+    """
+    from projectmem.commands import doctor
+
+    home = tmp_path / "home"
+    cfg = home / ".cursor" / "mcp.json"
+    cfg.parent.mkdir(parents=True)
+    set_fake_home(monkeypatch, home)
+    monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "pm"))
+
+    clean = '{"mcpServers":{"projectmem":{"args":["-m","projectmem.mcp_server"]}}}'
+    pinned = ('{"mcpServers":{"projectmem":{"args":'
+              '["-m","projectmem.mcp_server","--root","/x"]}}}')
+
+    cfg.write_text(clean, encoding="utf-8")
+    assert doctor._reverted_configs([]) == []          # first sight, nothing to report
+
+    state = doctor._load_state()
+    assert str(cfg) in state, "a clean config must be recorded the first time it is seen"
+    assert state[str(cfg)]["pinned"] is False
+
+    cfg.write_text(pinned, encoding="utf-8")
+    reverted = doctor._reverted_configs([("Cursor", cfg)])
+    assert [c for c, _ in reverted] == ["Cursor"]
+
+
+def test_doctor_ignores_configs_that_never_mention_projectmem(tmp_path, monkeypatch):
+    """Someone else's MCP server is not ours to track."""
+    from projectmem.commands import doctor
+
+    home = tmp_path / "home"
+    cfg = home / ".cursor" / "mcp.json"
+    cfg.parent.mkdir(parents=True)
+    cfg.write_text('{"mcpServers":{"other":{"args":["-m","something.else"]}}}',
+                   encoding="utf-8")
+    set_fake_home(monkeypatch, home)
+    monkeypatch.setenv("PROJECTMEM_HOME", str(tmp_path / "pm"))
+
+    doctor._reverted_configs([])
+    assert str(cfg) not in doctor._load_state()
