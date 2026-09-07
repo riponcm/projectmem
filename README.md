@@ -4,8 +4,8 @@
   <img src="https://raw.githubusercontent.com/projectmem/projectmemdoc/main/logo/projectmem-wordmark-800.png" alt="projectmem" width="420" />
 
   <p>
-    <a href="https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md"><b>🎉 v0.3.1 is out</b></a> —
-    one MCP server for every project, and a security fix worth upgrading for.
+    <a href="https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md"><b>🎉 v0.3.2 is out</b></a> —
+    Windows support for the file watcher, and a doctor that notices when a fix gets undone.
     <a href="https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md">See what changed →</a>
   </p>
 
@@ -164,7 +164,7 @@ cd your-project && pjm init
 |---|---|
 | **[Complete setup guide](https://projectmem.dev/blog/projectmem-complete-guide-ai-coding-agent-memory)** | The full walkthrough on the web — install, MCP setup per client, `pjm doctor`, your first logged issue, and both dashboards. Every terminal output is captured from a real run. |
 | **[TUTORIAL.md](TUTORIAL.md)** | 15-minute step-by-step walkthrough — set up projectmem on your own project, watch the lifecycle, see the pre-commit warning fire. |
-| **[CHANGELOG.md](CHANGELOG.md)** | Release history. Latest: v0.3.1 — opt-in update checks, on top of 0.3.0's global MCP mode, project registry and rebuilt dashboard. |
+| **[CHANGELOG.md](CHANGELOG.md)** | Release history. Latest: v0.3.2 — the file watcher works on Windows, and `pjm doctor` spots a config fix that got reverted. |
 | **[Research paper (arXiv:2606.12329)](https://arxiv.org/abs/2606.12329)** | *PROJECTMEM: A Local-First, Event-Sourced Memory and Judgment Layer for AI Coding Agents* — the peer-readable version: design, Memory-as-Governance framing, capability comparison, and the 207-event dogfooding study. |
 | **[LICENSE](LICENSE)** | MIT |
 
@@ -200,6 +200,28 @@ That's it. `pjm init` installs three git hooks (pre-commit warnings, post-commit
 > The canonical command is `projectmem`. A `pjm` alias is installed for speed.
 
 ---
+
+## ✨ New in 0.3.2 — Windows, properly
+
+`pjm watch --daemon` crashed on Windows with `AttributeError: module 'os' has no
+attribute 'fork'`. It now spawns a detached worker instead of forking, so
+background watching works on every platform.
+
+Fixing that uncovered a second bug hiding behind it. Liveness was checked with
+`os.kill(pid, 0)` — a POSIX idiom that does not port, because on Windows
+`os.kill` routes to `TerminateProcess` and signal 0 is not a check at all. The
+watcher could not be seen or stopped there, and each `pjm watch --daemon` leaked
+another process. Both are fixed.
+
+Windows daemon support was contributed by
+[@medium-effort](https://github.com/medium-effort) ([#13](https://github.com/riponcm/projectmem/pull/13)).
+
+`pjm doctor` also got two things. It now tells you to **quit your AI client
+before editing its config** — those files hold the app's own preferences too, so
+a running client can rewrite the whole thing on exit and restore the `--root`
+you just removed. And it remembers what it saw last time, so a config that was
+clean and is pinned again gets named as a revert rather than looking like doctor
+being flaky. Local files only; nothing leaves your machine.
 
 ## ✨ New in 0.3.1 — know when to upgrade
 

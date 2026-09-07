@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.2
+
+**Windows works properly now.** `pjm watch --daemon` crashed there, and fixing the crash uncovered a second bug one function away that had been hiding behind it. Both are fixed. `pjm doctor` also learned to notice when a fix you made gets undone.
+
+### Fixed
+
+- **`pjm watch --daemon` crashed on Windows** with `AttributeError: module 'os' has no attribute 'fork'`. Daemonisation used the POSIX-only `os.fork()` and `os.setsid()`; it now spawns a detached worker with `subprocess.Popen` — `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW` on Windows, `start_new_session=True` elsewhere. Contributed by [@medium-effort](https://github.com/medium-effort) ([#12](https://github.com/riponcm/projectmem/issues/12), [#13](https://github.com/riponcm/projectmem/pull/13)).
+
+- **The watcher could not be seen or stopped on Windows, and leaked processes.** `_running_pid()` probed liveness with `os.kill(pid, 0)`. That is the POSIX idiom and does not port: on Windows `os.kill` routes to `TerminateProcess`, so signal 0 is not a liveness check and fails whether or not the process exists. `pjm watch --status` always said "not running", the PID file was deleted as stale while the worker ran on, `--stop` found nothing to stop, and every further `--daemon` slipped past the already-running guard and started another one. Liveness now uses `OpenProcess` + `GetExitCodeProcess` on Windows, and access-denied counts as alive — a process you cannot open still exists, and calling it dead is what orphans it. This bug predates the crash above and was only invisible because nothing got far enough to hit it.
+
+- **Two tests only passed on POSIX.** One asserted a raw path inside JSON output where the product correctly emits escaped backslashes; the other set `$HOME`, which Windows ignores in favour of `%USERPROFILE%`, so the fixture home went unused and the real profile was scanned. All nineteen `$HOME` fixtures now go through one portable helper.
+
+### Changed
+
+- **`pjm doctor` tells you to quit the client before editing its config.** These files hold the app's own preferences too, so a running client can rewrite the whole file from the copy it loaded at startup and restore the `--root` you just removed. Doctor was giving advice that silently fails while the app is open.
+
+- **`pjm doctor` notices when a fix has been undone.** It remembers the previous verdict for each client config, so a config that was clean last run and is pinned again now gets named, with the time it was last clean — instead of looking flaky for reporting a problem you know you already fixed. Local files only; no process inspection, and nothing leaves your machine.
+
 ## 0.3.1
 
 **Know when there is something to upgrade to — without giving up the promise.** projectmem says it makes no network calls, and that is a reason people choose it. So update checking is opt-in everywhere, and nothing about your machine is ever sent: the request is a plain GET of the same public JSON file `pip install` reads.
