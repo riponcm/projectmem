@@ -98,6 +98,80 @@ def _should_ignore(path: Path, root: Path, gitignore: set[str]) -> bool:
     return False
 
 
+# Win32 constants, named rather than inlined so the calls below read as the API
+# they are. QUERY_LIMITED_INFORMATION is the least privilege that answers "does
+# this pid exist?" and works across integrity levels.
+_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+_PROCESS_TERMINATE = 0x0001
+_STILL_ACTIVE = 259
+_ERROR_ACCESS_DENIED = 5
+_ERROR_INVALID_PARAMETER = 87
+
+
+def _pid_alive(pid: int) -> bool:
+    """Is this process running?
+
+    ``os.kill(pid, 0)`` is the POSIX idiom and does not port. On Windows
+    ``os.kill`` routes to ``TerminateProcess``, so signal 0 is not a liveness
+    probe at all — it fails with ERROR_INVALID_PARAMETER whether or not the
+    process exists. Every caller then read "not running" for a daemon that was
+    very much running, and `--status` and `--stop` were unusable there.
+    """
+    if sys.platform.startswith("win"):
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            # Access denied means it exists and belongs to someone else — still
+            # alive. Treating that as dead would delete a live PID file and
+            # orphan the worker, which is the failure this function exists to
+            # prevent. Anything else (notably ERROR_INVALID_PARAMETER) means no
+            # such process.
+            return kernel32.GetLastError() == _ERROR_ACCESS_DENIED
+        try:
+            code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return False
+            return code.value == _STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
+
+    try:
+        os.kill(pid, 0)
+        return True
+    except PermissionError:
+        return True  # exists, owned by another user
+    except OSError:
+        return False
+
+
+def _terminate(pid: int) -> None:
+    """Ask a process to stop, raising the same errors ``os.kill`` would.
+
+    Callers already handle ProcessLookupError and PermissionError, so the
+    Windows path raises those rather than inventing its own vocabulary.
+    """
+    if sys.platform.startswith("win"):
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        handle = kernel32.OpenProcess(_PROCESS_TERMINATE, False, pid)
+        if not handle:
+            err = kernel32.GetLastError()
+            if err == _ERROR_ACCESS_DENIED:
+                raise PermissionError(f"Access denied terminating PID {pid}")
+            raise ProcessLookupError(f"No process with PID {pid}")
+        try:
+            if not kernel32.TerminateProcess(handle, 1):
+                raise PermissionError(f"Could not terminate PID {pid}")
+        finally:
+            kernel32.CloseHandle(handle)
+        return
+
+    os.kill(pid, signal.SIGTERM)
+
+
 def _running_pid(root: Path | None = None) -> int | None:
     """Return PID if a daemon is running and reachable, else None."""
     pf = _pid_path(root)
@@ -107,17 +181,14 @@ def _running_pid(root: Path | None = None) -> int | None:
         pid = int(pf.read_text(encoding="utf-8").strip())
     except (ValueError, OSError):
         return None
-    # Is process alive?
-    try:
-        os.kill(pid, 0)
+    if _pid_alive(pid):
         return pid
+    # Genuinely stale — the process is gone, so the file is noise.
+    try:
+        pf.unlink()
     except OSError:
-        # Stale PID file — clean up
-        try:
-            pf.unlink()
-        except OSError:
-            pass
-        return None
+        pass
+    return None
 
 
 def _cleanup_pid_file(root: Path | None = None) -> None:
@@ -403,7 +474,7 @@ def _stop_daemon(root: Path | None = None) -> None:
         return
 
     try:
-        os.kill(pid, signal.SIGTERM)
+        _terminate(pid)
         # Wait up to 3s for clean exit
         for _ in range(15):
             time.sleep(0.2)
