@@ -15,7 +15,7 @@ from pathlib import Path
 
 import typer
 
-from projectmem.models import Event, superseded_ids
+from projectmem.models import Event, location_to_file, superseded_ids
 from projectmem.storage import read_events
 
 RECENT_DAYS = 30
@@ -93,7 +93,7 @@ def _recent(events: list[Event], days: int = RECENT_DAYS) -> list[Event]:
 
 def _file_of(event: Event) -> str | None:
     if event.location:
-        return event.location.split(":")[0]
+        return location_to_file(event.location) or event.location
     if event.files:
         return event.files[0]
     return None

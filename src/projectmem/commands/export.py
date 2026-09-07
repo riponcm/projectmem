@@ -18,7 +18,7 @@ from pathlib import Path
 
 import typer
 
-from projectmem.models import Event, superseded_ids
+from projectmem.models import Event, location_to_file, superseded_ids
 from projectmem.storage import read_events
 
 MEMORY_START = "<!-- >>> projectmem memory (auto-generated, do not edit) >>> -->"
@@ -133,7 +133,7 @@ def build_memory_block(events: list[Event], root: Path) -> str:
         by_file: dict[str, list[Event]] = defaultdict(list)
         for e in failed:
             file_path = (
-                e.location.split(":")[0] if e.location
+                location_to_file(e.location) or e.location if e.location
                 else (e.files[0] if e.files else "(general)")
             )
             by_file[file_path].append(e)

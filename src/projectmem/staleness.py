@@ -17,7 +17,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from projectmem.models import Event, superseded_ids
+from projectmem.models import Event, location_to_file, superseded_ids
 
 # A memory is "possibly stale" once its file changed in this many commits
 # after the event was logged. 3 tracks the precheck block threshold — one
@@ -34,7 +34,7 @@ def location_file(event: Event) -> str | None:
     """File part of an event's location (``src/auth.py:42`` -> ``src/auth.py``)."""
     if not event.location:
         return None
-    file_part = event.location.split(":")[0].strip()
+    file_part = location_to_file(event.location) or ""
     # Locations like "class AuthHandler" or "deploy pipeline" aren't paths.
     if not file_part or ("/" not in file_part and "." not in file_part):
         return None

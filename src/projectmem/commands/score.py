@@ -17,6 +17,7 @@ from typing import Any
 
 import typer
 
+from projectmem.models import location_to_file
 from projectmem.storage import read_events, require_mem_dir
 
 
@@ -74,9 +75,9 @@ def calculate_score(events: list[dict[str, Any]], since_days: int | None = None)
 
         # Track files
         event_files = list(e.get("files", []))
-        loc = e.get("location", "")
-        if loc and ":" in loc:
-            event_files.append(loc.split(":")[0])
+        loc_file = location_to_file(e.get("location"))
+        if loc_file:
+            event_files.append(loc_file)
         for f in event_files:
             files_seen.add(f)
             file_event_counts[f] += 1
@@ -358,8 +359,9 @@ def _format_verbose_breakdown(
         for f in e.get("files") or []:
             files_with_gotchas.add(f)
         loc = e.get("location") or ""
-        if loc and ":" in loc:
-            files_with_gotchas.add(loc.split(":")[0])
+        loc_file = location_to_file(loc)
+        if loc_file:
+            files_with_gotchas.add(loc_file)
 
     lines = ["", f"  {bold}Verbose Breakdown{reset}", f"  {dim}{'─' * 44}{reset}"]
     sections = [

@@ -10,12 +10,15 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime, timezone
+import os
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 
 # ── Paths ──
+# Kept for anything importing it directly. It is the default location, not the
+# authority — resolve through global_dir(), which honours $PROJECTMEM_HOME.
 GLOBAL_DIR = Path.home() / ".projectmem" / "global"
 PATTERNS_FILE = "patterns.jsonl"
 GOTCHAS_FILE = "library_gotchas.jsonl"
@@ -23,9 +26,21 @@ PREFERENCES_FILE = "stack_preferences.md"
 
 
 def global_dir() -> Path:
-    """Return the global memory directory, creating it if needed."""
-    GLOBAL_DIR.mkdir(parents=True, exist_ok=True)
-    return GLOBAL_DIR
+    """The global memory directory, created if needed.
+
+    Resolved per call and honouring $PROJECTMEM_HOME, the same way
+    project_registry.registry_path() does. This used to read a module constant
+    fixed at import from Path.home(), so redirecting $PROJECTMEM_HOME moved the
+    registry but not this: every append_event() auto-promotes library mentions
+    here, so a test or a fixture writing events under an isolated home still
+    wrote invented gotchas into the developer's real ~/.projectmem/global/.
+    Isolating one without the other is not isolation.
+    """
+    home = os.environ.get("PROJECTMEM_HOME")
+    base = Path(home) if home else (Path.home() / ".projectmem")
+    path = base / "global"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def patterns_path() -> Path:

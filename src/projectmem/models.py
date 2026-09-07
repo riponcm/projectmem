@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -53,6 +54,61 @@ def normalize_timestamp(ts: str | None) -> str:
         .strftime("%Y-%m-%dT%H:%M:%SZ")
     )
 
+
+
+# Extensions that make a dotted token a file rather than an identifier.
+# "auth.py" is a file; "AuthService.validate" is a method, and counting it as a
+# file would put a phantom entry in the score's file coverage.
+_SOURCE_SUFFIXES = {
+    "py", "pyi", "js", "jsx", "ts", "tsx", "mjs", "cjs", "rs", "go", "rb", "php",
+    "java", "kt", "kts", "swift", "c", "h", "cc", "cpp", "hpp", "cs", "m", "mm",
+    "sh", "bash", "zsh", "ps1", "sql", "html", "css", "scss", "sass", "vue",
+    "svelte", "json", "yaml", "yml", "toml", "ini", "cfg", "conf", "xml", "md",
+    "rst", "txt", "lock", "dockerfile", "gradle", "tf", "proto", "graphql", "ex",
+    "exs", "erl", "hs", "scala", "clj", "lua", "r", "jl", "dart", "zig", "nim",
+}
+
+_LINE_SUFFIX = re.compile(r":\d+(?::\d+)?$")
+_WINDOWS_DRIVE = re.compile(r"^[A-Za-z]:[\\/]")
+
+
+def location_to_file(location: str | None) -> str | None:
+    """The file part of an event location, or None if it does not name a file.
+
+    Locations are written as ``file``, ``file:line``, ``file:line:col``, or a
+    non-file identifier such as ``ClassName.method``.
+
+    Callers used to do ``location.split(":")[0]``, which has two faults. A bare
+    ``src/foo.py`` has no colon, so score's file coverage counted nothing —
+    despite ``--at`` inviting exactly that, and costing up to 20 points in
+    silence. And a Windows path carries a drive colon: ``C:\\src\\foo.py:42``
+    split on the first colon yields ``"C"``.
+    """
+    if not location:
+        return None
+    loc = location.strip().strip("\"'")
+    if not loc:
+        return None
+
+    # Protect the drive colon before stripping a line suffix.
+    drive = ""
+    if _WINDOWS_DRIVE.match(loc):
+        drive, loc = loc[:2], loc[2:]
+
+    loc = _LINE_SUFFIX.sub("", loc)
+    if not loc:
+        return None
+
+    candidate = drive + loc
+    if "/" in loc or "\\" in loc:
+        return candidate
+
+    # No separator: only a recognised source suffix makes this a file.
+    if "." in loc:
+        suffix = loc.rsplit(".", 1)[1].lower()
+        if suffix in _SOURCE_SUFFIXES:
+            return candidate
+    return None
 
 VALID_CAPTURE_SOURCES = {
     "git_post_commit",

@@ -26,7 +26,7 @@ from typing import Any
 
 import typer
 
-from projectmem.models import Event
+from projectmem.models import Event, location_to_file
 from projectmem.storage import MEM_DIR, read_events, require_mem_dir
 
 
@@ -413,7 +413,7 @@ def _events_for_file(file_path: str, events: list[Event]) -> list[Event]:
             continue
         # Location field
         if e.location:
-            loc_file = e.location.split(":")[0]
+            loc_file = location_to_file(e.location) or ""
             if loc_file == file_path:
                 matching.append(e)
                 continue

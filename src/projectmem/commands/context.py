@@ -22,7 +22,7 @@ from typing import Any
 
 import typer
 
-from projectmem.models import Event
+from projectmem.models import Event, location_to_file
 from projectmem.storage import (
     read_events,
     require_mem_dir,
@@ -231,7 +231,7 @@ def _score_event(
     # File relevance
     event_files = set(event.files or [])
     if event.location and ":" in event.location:
-        event_files.add(event.location.split(":")[0])
+        event_files.add(location_to_file(event.location) or event.location)
 
     file_relevance = 0.3  # base relevance
     if focus:
@@ -352,7 +352,7 @@ def _build_file_gotchas(
             continue  # L-022a: don't pollute File Gotchas with backfill noise
         event_files = list(event.files or [])
         if event.location and ":" in event.location:
-            event_files.append(event.location.split(":")[0])
+            event_files.append(location_to_file(event.location) or event.location)
         for f in event_files:
             if focus and not (f.startswith(focus) or focus in f):
                 continue
