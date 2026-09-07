@@ -277,9 +277,9 @@ def _reverted_configs(pinned: list[tuple[str, Path]]) -> list[tuple[str, str]]:
     # first run on a clean config recorded nothing, and a clobber straight after
     # it went unreported: exactly the case this function exists to catch, missed
     # for exactly the users who had not hit the problem yet.
-    for client, path, is_pinned in _projectmem_client_configs():
+    for client, path, cfg_state in _projectmem_client_configs(Path.cwd()):
         key = str(path)
-        if is_pinned or key in pinned_paths:
+        if cfg_state != "clean" or key in pinned_paths:
             continue
         state[key] = {"pinned": False, "seen": now, "client": client}
 
@@ -365,7 +365,18 @@ def run(
         typer.secho("\n  ✓ Every registered project still has its memory", fg=typer.colors.GREEN)
 
     # ── 3. client configs still pinned to one repo ──
-    pinned = _pinned_client_configs()
+    # Scanned once here so the project-scoped configs are included and the
+    # unreadable ones can be reported rather than silently skipped.
+    scanned = _projectmem_client_configs(Path.cwd())
+    unreadable = [(c, p) for c, p, st in scanned if st == "unreadable"]
+    pinned = [(c, p) for c, p, st in scanned if st == "pinned"]
+    if unreadable:
+        problems += 1
+        typer.secho("\n  ⚠ Could not read some client config(s) — not checked",
+                    fg=typer.colors.YELLOW)
+        for client, path in unreadable:
+            typer.echo(f"      {client}  {path}")
+        typer.echo("      A config that cannot be read is not a config that is fine.")
     if pinned:
         problems += 1
         typer.secho("\n  ⚠ MCP client config(s) still pinned to a single repo", fg=typer.colors.YELLOW)

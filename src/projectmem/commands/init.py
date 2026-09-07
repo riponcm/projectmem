@@ -533,7 +533,7 @@ def _detect_main_folders(root: Path) -> list[tuple[str, str]]:
 # Known client config locations. We READ these to tell the user what to change
 # — projectmem never edits an MCP client's settings. Printing the config is the
 # whole contract; the user stays in control of their own tooling.
-def _client_configs() -> list[tuple[str, Path]]:
+def _client_configs(project_root: Path | None = None) -> list[tuple[str, Path]]:
     """Where each client keeps its MCP settings.
 
     Built per call, not at import: a module-level Path.home() freezes the home
@@ -542,14 +542,21 @@ def _client_configs() -> list[tuple[str, Path]]:
     """
     home = Path.home()
     xdg = Path(os.environ.get("XDG_CONFIG_HOME") or (home / ".config"))
-    return [
+    # %APPDATA% is the client's own answer for where this lives. home/AppData/
+    # Roaming is only the default it usually resolves to, and is wrong wherever
+    # the profile is redirected — roaming profiles, OneDrive Known Folder Move,
+    # most managed corporate setups.
+    appdata = Path(os.environ.get("APPDATA") or (home / "AppData/Roaming"))
+    local = Path(os.environ.get("LOCALAPPDATA") or (home / "AppData/Local"))
+
+    entries = [
         # macOS
         (
             "Claude Desktop",
             home / "Library/Application Support/Claude/claude_desktop_config.json",
         ),
         # Windows
-        ("Claude Desktop", home / "AppData/Roaming/Claude/claude_desktop_config.json"),
+        ("Claude Desktop", appdata / "Claude/claude_desktop_config.json"),
         # Linux — Claude Desktop has no official build, but the community ones
         # follow XDG, and $XDG_CONFIG_HOME is frequently moved off ~/.config.
         ("Claude Desktop", xdg / "Claude/claude_desktop_config.json"),
@@ -560,20 +567,62 @@ def _client_configs() -> list[tuple[str, Path]]:
         ("Claude Code", home / ".claude.json"),
     ]
 
+    # A Microsoft Store (MSIX) install runs in an AppContainer, where the app's
+    # writes to %APPDATA% are redirected into the package's LocalCache. Inside
+    # the container the config still appears at %APPDATA%\Claude — that is a
+    # genuine view, not a fake one — but from any ordinary process it does not
+    # exist there at all. Without this, doctor finds nothing on a Store install
+    # and reports a clean bill of health while a pinned server is running, which
+    # is worse than missing the problem: it ends the investigation.
+    #
+    # Glob the publisher hash rather than hardcoding it; sorted() keeps the
+    # output stable when more than one package matches.
+    try:
+        for pkg in sorted((local / "Packages").glob("Claude_*")):
+            entries.append((
+                "Claude Desktop (Store)",
+                pkg / "LocalCache/Roaming/Claude/claude_desktop_config.json",
+            ))
+    except OSError:
+        pass
 
-def _projectmem_client_configs() -> list[tuple[str, Path, bool]]:
+    if project_root is not None:
+        # A per-repo config pins just as effectively as a global one. Doctor
+        # cannot enumerate every repo on the machine, but the one you are
+        # standing in is the one you are asking about.
+        entries.append(("This project (.mcp.json)", project_root / ".mcp.json"))
+        entries.append(
+            ("This project (.cursor/mcp.json)", project_root / ".cursor/mcp.json")
+        )
+
+    return entries
+
+
+def _projectmem_client_configs(
+    project_root: Path | None = None,
+) -> list[tuple[str, Path, str]]:
     """Every client config that mentions projectmem, and whether it is pinned.
 
-    One scan, two callers. `pjm doctor` needs the clean ones as well as the
+    Each entry is (client, path, state) where state is "pinned", "clean" or
+    "unreadable".
+
+    One scan, several callers. `pjm doctor` needs the clean ones as well as the
     pinned ones so it can notice a config that was clean and has been pinned
     again — and a second scan somewhere else would drift from this one the
     first time a client changes how it stores things.
     """
     found = []
-    for name, path in _client_configs():
+    for name, path in _client_configs(project_root):
         try:
             text = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            continue          # not installed — nothing to say
         except OSError:
+            # Present but unreadable: permissions, a lock, a broken link. This
+            # used to be swallowed, which made "I could not look" identical to
+            # "I looked and it is fine" — the same false-green that the Store
+            # path bug produced, from a different direction.
+            found.append((name, path, "unreadable"))
             continue
         if "projectmem" not in text:
             continue
@@ -586,11 +635,13 @@ def _projectmem_client_configs() -> list[tuple[str, Path, bool]]:
             or "cwd =" in text
             or "PROJECTMEM_ROOT" in text
         )
-        found.append((name, path, pinned))
+        found.append((name, path, "pinned" if pinned else "clean"))
     return found
 
 
-def _pinned_client_configs() -> list[tuple[str, Path]]:
+def _pinned_client_configs(
+    project_root: Path | None = None,
+) -> list[tuple[str, Path]]:
     """Client configs that still pin projectmem to one repo.
 
     A 0.2.x user upgrading has `--root` (or a `cwd`) in their client config. It
@@ -598,7 +649,11 @@ def _pinned_client_configs() -> list[tuple[str, Path]]:
     today is invisible to the server they already have. Detecting it is the
     difference between "it just works" and a silent dead end.
     """
-    return [(name, path) for name, path, pinned in _projectmem_client_configs() if pinned]
+    return [
+        (name, path)
+        for name, path, state in _projectmem_client_configs(project_root)
+        if state == "pinned"
+    ]
 
 
 def _print_mcp_config(root: Path, single_project: bool = False) -> None:
