@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import signal
+import subprocess
 import sys
 import time
 from collections import defaultdict, deque
@@ -132,6 +133,7 @@ def run(
     daemon: bool = False,
     stop: bool = False,
     status: bool = False,
+    worker: bool = False,
     root: Path | None = None,
 ) -> None:
     """Dispatch watch subcommands."""
@@ -142,6 +144,9 @@ def run(
         return
     if status:
         _show_status(root)
+        return
+    if worker:
+        _run_worker(root)
         return
 
     # Check for existing daemon
@@ -172,44 +177,9 @@ def _run_foreground(root: Path | None = None) -> None:
         _cleanup_pid_file(root)
 
 
-def _run_as_daemon(root: Path | None = None) -> None:
-    """Fork to background and run watch loop."""
-    # Fork once and detach
-    try:
-        pid = os.fork()
-    except OSError as e:
-        typer.echo(f"\033[31mprojectmem:\033[0m Daemon fork failed: {e}", err=True)
-        return
-
-    if pid > 0:
-        # Parent — report success and exit
-        time.sleep(0.3)  # give child time to write PID
-        new_pid = _running_pid(root)
-        if new_pid:
-            typer.echo(
-                f"\033[32mprojectmem:\033[0m Watcher started (PID {new_pid})\n"
-                f"  Logs: .projectmem/watch.log\n"
-                f"  Stop: pjm watch --stop"
-            )
-        else:
-            typer.echo(
-                "\033[33mprojectmem:\033[0m Daemon may have failed to start — check .projectmem/watch.log"
-            )
-        return
-
-    # Child — detach and run
-    os.setsid()
-    # Redirect stdio to watch.log
+def _run_worker(root: Path | None = None) -> None:
+    """Run watch loop as background worker."""
     root_path = root or Path.cwd()
-    log_file = _log_path(root_path)
-    try:
-        log_fd = open(log_file, "a", encoding="utf-8")
-        os.dup2(log_fd.fileno(), sys.stdout.fileno())
-        os.dup2(log_fd.fileno(), sys.stderr.fileno())
-        sys.stdin = open(os.devnull, "r")
-    except OSError:
-        pass
-
     _write_pid(os.getpid(), root_path)
 
     # Register signal handlers
@@ -218,13 +188,82 @@ def _run_as_daemon(root: Path | None = None) -> None:
         _cleanup_pid_file(root_path)
         sys.exit(0)
 
-    signal.signal(signal.SIGTERM, _shutdown)
-    signal.signal(signal.SIGINT, _shutdown)
+    try:
+        signal.signal(signal.SIGTERM, _shutdown)
+    except (ValueError, AttributeError):
+        pass
+    try:
+        signal.signal(signal.SIGINT, _shutdown)
+    except (ValueError, AttributeError):
+        pass
 
     try:
         _watch_loop(root_path, verbose=False)
     finally:
         _cleanup_pid_file(root_path)
+
+
+def _run_as_daemon(root: Path | None = None) -> None:
+    """Spawn detached background process and run watch loop."""
+    root_path = (root or Path.cwd()).resolve()
+    log_file = _log_path(root_path)
+
+    try:
+        log_fd = open(log_file, "a", encoding="utf-8")
+    except OSError as e:
+        typer.echo(f"\033[31mprojectmem:\033[0m Cannot open log file: {e}", err=True)
+        return
+
+    cmd = [sys.executable, "-m", "projectmem.cli", "watch", "--worker"]
+
+    try:
+        if sys.platform.startswith("win"):
+            flags = (
+                subprocess.DETACHED_PROCESS
+                | subprocess.CREATE_NEW_PROCESS_GROUP
+                | getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+            )
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(root_path),
+                stdin=subprocess.DEVNULL,
+                stdout=log_fd,
+                stderr=log_fd,
+                creationflags=flags,
+                close_fds=True,
+            )
+        else:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(root_path),
+                stdin=subprocess.DEVNULL,
+                stdout=log_fd,
+                stderr=log_fd,
+                start_new_session=True,
+                close_fds=True,
+            )
+    except OSError as e:
+        typer.echo(f"\033[31mprojectmem:\033[0m Daemon spawn failed: {e}", err=True)
+        return
+    finally:
+        log_fd.close()
+
+    # Give child a moment to write PID and initialize
+    time.sleep(0.3)
+    if proc.poll() is not None:
+        typer.echo(
+            f"\033[31mprojectmem:\033[0m Daemon exited unexpectedly (code {proc.returncode}) — check .projectmem/watch.log",
+            err=True,
+        )
+        return
+
+    new_pid = _running_pid(root_path) or proc.pid
+    _write_pid(new_pid, root_path)
+    typer.echo(
+        f"\033[32mprojectmem:\033[0m Watcher started (PID {new_pid})\n"
+        f"  Logs: .projectmem/watch.log\n"
+        f"  Stop: pjm watch --stop"
+    )
 
 
 def _write_pid(pid: int, root: Path | None = None) -> None:
@@ -370,6 +409,7 @@ def _stop_daemon(root: Path | None = None) -> None:
             time.sleep(0.2)
             if _running_pid(root) is None:
                 break
+        _cleanup_pid_file(root)
         typer.echo(f"\033[32mprojectmem:\033[0m Watcher stopped (PID {pid}).")
     except ProcessLookupError:
         _cleanup_pid_file(root)
