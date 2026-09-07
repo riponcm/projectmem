@@ -15,7 +15,7 @@
   <p>
     <a href="https://pypi.org/project/projectmem/"><img src="https://img.shields.io/pypi/v/projectmem.svg?color=4c1d95&label=pypi" alt="PyPI version"></a>
     <a href="https://pypi.org/project/projectmem/"><img src="https://img.shields.io/pypi/pyversions/projectmem.svg?color=3b82f6" alt="Python Versions"></a>
-    <a href="https://pepy.tech/project/projectmem"><img src="https://static.pepy.tech/personalized-badge/projectmem?period=total&units=abbreviation&left_color=grey&right_color=brightgreen&left_text=downloads" alt="PyPI total downloads"></a>
+    <a href="https://pepy.tech/project/projectmem"><img src="https://static.pepy.tech/personalized-badge/projectmem?period=month&units=abbreviation&left_color=grey&right_color=brightgreen&left_text=downloads%2Fmonth" alt="PyPI downloads per month"></a>
     <a href="https://github.com/riponcm/projectmem/stargazers"><img src="https://img.shields.io/github/stars/riponcm/projectmem?style=flat&color=f59e0b&label=stars" alt="GitHub stars"></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-3b82f6.svg" alt="License: MIT"></a>
     <a href="https://arxiv.org/abs/2606.12329"><img src="https://img.shields.io/badge/arXiv-2606.12329-b31b1b.svg" alt="arXiv paper"></a>
