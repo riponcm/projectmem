@@ -127,6 +127,31 @@ def run(trigger: str = "commit", root: Path | None = None) -> None:
         _capture_merge(root_path)
 
 
+def _pick_location(files: list[str]) -> str | None:
+    """Pick the file an auto-captured event is about.
+
+    ``git diff-tree --name-only`` lists changed paths in lexicographic order,
+    and ".projectmem/" sorts ahead of almost every real source path because
+    of the leading dot. Using ``files[0]`` therefore pinned the location to a
+    memory file whenever a commit also rewrote one — and the project's own
+    workflow regenerates ``summary.md`` on every recorded event, so that was
+    most commits. Staleness checks then count every later commit touching the
+    memory file and report valid memories as possibly stale (issue #20).
+
+    The event should cite the code the commit describes: the first changed
+    path outside the memory directory. A commit that only touches
+    projectmem's own files has no source file to cite, so fall back to the
+    first path to stay debuggable.
+    """
+    if not files:
+        return None
+    for file in files:
+        if file == MEM_DIR or file.startswith(MEM_DIR + "/"):
+            continue
+        return file
+    return files[0]
+
+
 def _capture_commit(root: Path) -> None:
     """Classify and capture a git commit."""
     msg = _git_last_message(root)
@@ -166,7 +191,7 @@ def _capture_commit(root: Path) -> None:
         outcome=matched["outcome"],
         files=files[:10],  # Cap at 10 files
         git_commit=commit_hash,
-        location=files[0] if files else None,
+        location=_pick_location(files),
         auto_captured=True,
         capture_source=matched["capture_source"],
         capture_confidence=matched["confidence"],
