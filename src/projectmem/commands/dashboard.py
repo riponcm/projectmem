@@ -603,7 +603,8 @@ code{font-family:ui-monospace,Menlo,monospace;background:#DFE7F3;padding:1px 5px
   <div class="foot">100% local · aggregated at read-time from each repo's <code>.projectmem/</code> · nothing ever leaves your machine · <a href="https://github.com/riponcm/projectmem" target="_blank" rel="noopener">★ GitHub</a> · <a href="https://projectmem.dev/guide" target="_blank" rel="noopener">Docs</a>
     &middot; projectmem <b id="pm-ver">{{PJM_VERSION}}</b>
     <a id="pm-check" role="button" tabindex="0" style="cursor:pointer;border-bottom:1px dotted currentColor">check for updates</a>
-    <br><span style="opacity:.8">Also from the same maker: <a href="https://ossdrop.com" target="_blank" rel="noopener">OSSDrop</a> — a curated home for open-source tools. Drop yours.</span></div>
+    <br><span style="opacity:.8">Also from the same maker: <a href="https://ossdrop.com" target="_blank" rel="noopener">OSSDrop</a> — a curated home for open-source tools. Drop yours.
+    &middot; <a href="https://jharu.matily.org" target="_blank" rel="noopener">Jharu</a> — a free disk cleaner for dev caches and the git worktrees coding agents leave behind.</span></div>
 </div>
 <script>
 var DATA={{DASH_DATA}};
