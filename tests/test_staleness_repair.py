@@ -307,6 +307,18 @@ def test_the_project_root_is_not_a_file(repo):
     assert _analyze_files([str(repo)], events, root=repo) == []
 
 
+def test_a_blank_path_is_not_a_file(repo):
+    """"" is a substring of every summary, so precheck_file("") reported
+    every failed attempt and open issue in the log against no file at all."""
+    events = [Event(type="attempt", summary=f"tried lock variant {i}",
+                    outcome="failed", location="src/f.py") for i in range(3)]
+
+    for blank in ("", "   ", "\n"):
+        assert _analyze_files([blank], events, root=repo) == [], repr(blank)
+    # Surrounding whitespace is not part of the path.
+    assert _analyze_files([" src/f.py\n"], events, root=repo)
+
+
 def test_precheck_normalizes_each_logged_path_once(repo, monkeypatch):
     """Normalizing every event's paths again for every checked file took
     matching 5 files on a 3,000-event log from 14 ms to about 1 s."""

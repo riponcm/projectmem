@@ -262,9 +262,11 @@ def _analyze_files(
     # matched nothing and came back "Safe to modify". Two spellings of one
     # file are one file, and the root itself ("." once anchored) is not a file
     # at all: as a summary match it would hit every event with a period in it.
+    # A blank path is worse: "" is in every summary, so it matched the whole log.
     files = list(dict.fromkeys(
         rel for f in files
-        if (rel := project_relative(f, root, root_posix=root_posix)) != "."
+        if f.strip()
+        and (rel := project_relative(f.strip(), root, root_posix=root_posix)) != "."
     ))
     if not files:
         return warnings
