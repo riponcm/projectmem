@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from typer.testing import CliRunner
 
 from projectmem.cli import app
@@ -32,11 +33,12 @@ def test_summary_and_issue_file_are_regenerated(tmp_path, monkeypatch):
 
     assert "# projectmem" in summary
     assert "[DONE] #0001 login redirect loop" in summary
-    assert "fixed redirect guard in auth/redirect.py:88" in summary
     assert "Keep redirect handling in one middleware" in summary
     assert "`auth/redirect.py:88`" in summary
     assert len(issue_files) == 1
-    assert "login redirect loop" in issue_files[0].read_text(encoding="utf-8")
+    issue_file = issue_files[0].read_text(encoding="utf-8")
+    assert "login redirect loop" in issue_file
+    assert "fixed redirect guard in auth/redirect.py:88" in issue_file
 
 
 def test_regenerate_preserves_project_purpose(tmp_path, monkeypatch):
@@ -247,3 +249,87 @@ def test_an_orphan_attempt_does_not_crash_the_summary(tmp_path):
     lines = _recent_issue_lines(build_summary(events, tmp_path))
 
     assert len(lines) == 1 and "#0001" in lines[0]
+
+
+
+@pytest.mark.parametrize("issue_location,fix_location,shown", [
+    ("auth/redirect.py", "auth/middleware.py", " [auth/redirect.py]"),
+    (None, "auth/middleware.py", " [auth/middleware.py]"),
+    (None, None, ""),
+])
+def test_a_fixed_issue_is_listed_by_its_title_alone(
+    tmp_path, issue_location, fix_location, shown
+):
+    from projectmem.models import Event
+    from projectmem.summary import build_summary
+
+    events = [
+        Event(type="issue", summary="login redirect loop", issue_id="0001",
+              location=issue_location),
+        Event(type="attempt", summary="cleared the session cookie first",
+              issue_id="0001", outcome="failed"),
+        Event(type="fix", summary="guarded the redirect in one middleware",
+              issue_id="0001", location=fix_location),
+    ]
+    summary = build_summary(events, tmp_path)
+
+    assert _recent_issue_lines(summary) == [
+        f"- [DONE] #0001 login redirect loop{shown} (fixed)"
+    ]
+    assert "cleared the session cookie first" not in summary
+    assert "guarded the redirect in one middleware" not in summary
+
+
+def test_long_records_are_clipped_but_keep_their_location(tmp_path):
+    from projectmem.models import Event
+    from projectmem.storage import RECORD_CHARS
+    from projectmem.summary import build_summary
+
+    long_text = "the collector drops its websocket " * 30
+    events = [
+        Event(type="issue", summary=long_text, issue_id="0001",
+              location="src/collector/socket.py"),
+        Event(type="attempt", summary=long_text, issue_id="0001", outcome="partial"),
+        Event(type="attempt", summary="warmed the cache in main.py",
+              issue_id="0001", outcome="failed"),
+        Event(type="decision", summary=long_text),
+        Event(type="note", summary=long_text),
+    ]
+    summary = build_summary(events, tmp_path)
+
+    issue_line = _recent_issue_lines(summary)[0]
+    assert issue_line.endswith("... [src/collector/socket.py] (open)")
+    assert "  - Failed attempt: warmed the cache in main.py\n" in summary
+    clipped = [line for line in summary.splitlines() if "the collector drops" in line]
+    assert len(clipped) == 4
+    for line in clipped:
+        kept = line[line.index("the collector drops"):].split("...")[0]
+        assert long_text.startswith(kept)
+        assert long_text[len(kept)] == " ", "clipped in the middle of a word"
+        assert RECORD_CHARS // 2 < len(kept + "...") <= RECORD_CHARS
+
+
+def test_a_long_path_is_not_clipped_down_to_the_word_before_it(tmp_path):
+    from projectmem.models import Event
+    from projectmem.storage import RECORD_CHARS
+    from projectmem.summary import build_summary
+
+    path = "src/" + "generated/" * 40 + "client.py"
+    events = [Event(type="note", summary=f"see {path}")]
+    note = _section(build_summary(events, tmp_path), "Notes").strip()
+
+    assert note.startswith("- see src/generated/")
+    assert note.endswith("...")
+    assert len(note) == len("- ") + RECORD_CHARS
+
+
+def test_a_multi_line_record_stays_on_one_summary_line(tmp_path):
+    from projectmem.models import Event
+    from projectmem.summary import build_summary
+
+    events = [Event(type="note", summary="  first line\n## not a heading\n\tthird  ",
+                    location="a.py\n## not a heading either")]
+    summary = build_summary(events, tmp_path)
+
+    assert "- first line ## not a heading third [a.py ## not a heading either]" in summary
+    assert "\n## not a heading" not in summary

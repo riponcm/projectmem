@@ -22,10 +22,13 @@ PLAN_FILE = "plan.md"
 # project should pick up. `pjm init` rewrites a file whose marker is missing or
 # older than this (keeping a .bak); a file at this version is the user's and is
 # left alone. The marker is written into the template by ai_instructions().
-INSTRUCTIONS_VERSION = 1
+INSTRUCTIONS_VERSION = 2
 INSTRUCTIONS_BACKUP_FILE = AI_INSTRUCTIONS_FILE + ".bak"
 _INSTRUCTIONS_MARKER_RE = re.compile(r"<!--\s*projectmem-instructions:\s*(\d+)\s*-->")
 GLOBAL_MEMORY_HEADING = "## Global Memory — Inherited Knowledge"
+
+TITLE_CHARS = 140
+RECORD_CHARS = 300
 
 
 class ProjectMemError(RuntimeError):
@@ -413,8 +416,8 @@ def ai_instructions() -> str:
         "plan/idea as an event, and never add a new event type for it; the vocabulary "
         "stays the six typed events.\n\n"
         "Prefer the MCP tools when available — they're cheaper than reading files "
-        "individually (the summary is a bounded snapshot, typically a few hundred to "
-        "~1,500 tokens) and they auto-resolve the project root regardless of your "
+        "individually (the summary is a bounded snapshot, a few hundred tokens on a "
+        "young project and a few thousand on an aged one) and they auto-resolve the project root regardless of your "
         "working directory.\n\n"
         "**Step 3 — Check `.projectmem/issues/` only when a logged issue looks "
         "relevant to the current task** (use `get_issue(issue_id)` via MCP, or read "
@@ -523,6 +526,10 @@ def ai_instructions() -> str:
         "- Keep entries concise but specific enough that another person or AI can "
         "avoid repeating work. Include file paths, error names, test names.\n"
         "- Prefer several small accurate entries over one vague long entry.\n"
+        f"- Keep an issue title under {TITLE_CHARS} characters and an attempt, fix, "
+        f"note or decision under {RECORD_CHARS}. `summary.md` is read at every "
+        f"session start and clips longer records at {RECORD_CHARS} characters; put "
+        "further evidence into another `record_attempt` instead of one long entry.\n"
         "- Do not claim something is fixed until tests, reproduction, or user "
         "confirmation supports it.\n"
         "- Do not overwrite history. `events.jsonl` is append-only; `summary.md` "

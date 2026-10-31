@@ -129,6 +129,7 @@ def test_initialize_alone_never_rewrites_the_file(tmp_path):
 # fails, bump INSTRUCTIONS_VERSION in storage.py and record the new hash.
 _TEMPLATE_FINGERPRINTS = {
     1: "e699906caeddbf8a",
+    2: "78650ecb093907ef",
 }
 
 

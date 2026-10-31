@@ -49,6 +49,8 @@ from pydantic import Field
 
 from projectmem.commands import attempt, decision, fix, log, note
 from projectmem.storage import (
+    RECORD_CHARS,
+    TITLE_CHARS,
     ai_instructions_path,
     discover_mem_dir,
     project_map_path,
@@ -56,6 +58,13 @@ from projectmem.storage import (
     read_events,
     summary_path,
 )
+
+
+_TITLE_LENGTH = f" Keep it under {TITLE_CHARS} characters."
+_RECORD_LENGTH = (
+    f" Keep it under {RECORD_CHARS} characters: summary.md clips longer text."
+)
+_FIX_LENGTH = f" Keep it under {RECORD_CHARS} characters."
 
 
 # ── L-005: pin the project root before tools run ────────────────────────
@@ -189,9 +198,9 @@ mcp = FastMCP(
         "You are connected to projectmem — a mandatory project memory + "
         "judgment layer. The tools below are FAR cheaper than re-deriving "
         "the same information from source: get_summary returns a bounded "
-        "snapshot, typically a few hundred to ~1,500 tokens; re-scanning the "
-        "project to answer the same question usually costs several times "
-        "that.\n"
+        "snapshot, a few hundred tokens on a young project and a few thousand "
+        "on an aged one; re-scanning the project to answer the same question "
+        "usually costs several times that.\n"
         "\n"
         "SESSION START — call these three tools, in this order, BEFORE\n"
         "answering ANY question about this project:\n"
@@ -268,8 +277,8 @@ def get_summary(project: ProjectArg = None) -> str:
     Do NOT answer from conversation history alone.
     Do NOT re-scan source files (package.json, README, src/) to understand
     the project — `summary.md` is the distilled authoritative source and
-    stays bounded as the project ages (typically a few hundred to ~1,500
-    tokens), far less than re-deriving it.
+    stays bounded as the project ages (a few hundred tokens on a young
+    project, a few thousand on an aged one), far less than re-deriving it.
 
     Your prior assumptions about this project may be stale. Call this
     cheaply at session start (and again before ending) to verify your
@@ -548,8 +557,8 @@ def get_global_gotchas(
 def log_issue(
     summary: Annotated[str, Field(
         description="One-line description of the bug or unexpected "
-                    "behavior (~140 chars recommended). Becomes the "
-                    "issue title and is matched by search_events."
+                    "behavior. Becomes the issue title and is matched by "
+                    "search_events." + _TITLE_LENGTH
     )],
     location: Annotated[Optional[str], Field(
         description="Optional file path or component where the issue "
@@ -579,7 +588,9 @@ def log_issue(
 def record_attempt(
     summary: Annotated[str, Field(
         description="One-line description of what you tried (e.g., "
-                    "'tried contain: layout — preview still jumps')."
+                    "'tried contain: layout — preview still jumps'). Put "
+                    "further evidence into another attempt, not this one."
+                    + _RECORD_LENGTH
     )],
     outcome: Annotated[str, Field(
         description="Result of the attempt. Must be exactly one of "
@@ -635,6 +646,7 @@ def record_fix(
             description=(
                 "One-line description of the confirmed fix "
                 "(e.g., 'guarded submit handler with isSubmitting ref')."
+                + _FIX_LENGTH
             )
         ),
     ],
@@ -679,6 +691,7 @@ def add_decision(
                     "product decision (e.g., 'use bcrypt rounds=12 for "
                     "password hashing'). Becomes part of the project's "
                     "permanent record — write it for a future contributor."
+                    + _RECORD_LENGTH
     )],
     location: Annotated[Optional[str], Field(
         description="Optional file path or scope where the decision "
@@ -724,7 +737,7 @@ def add_note(
                     "or context worth preserving. Prefix with 'gotcha:' "
                     "or 'lesson:' to enable cross-project promotion — "
                     "e.g., 'gotcha: bcrypt v4 silently truncates "
-                    "passwords longer than 72 bytes'."
+                    "passwords longer than 72 bytes'." + _RECORD_LENGTH
     )],
     location: Annotated[Optional[str], Field(
         description="Optional file path or library this note applies to "
