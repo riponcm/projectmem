@@ -4,8 +4,8 @@
   <img src="https://raw.githubusercontent.com/projectmem/projectmemdoc/main/logo/projectmem-wordmark-800.png" alt="projectmem" width="420" />
 
   <p>
-    <a href="https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md"><b>🎉 v0.3.4 is out</b></a> —
-    the summary stays small as your project ages, commits are filed under the code they change, and stale warnings no longer depend on your time zone.
+    <a href="https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md"><b>🎉 v0.3.5 is out</b></a> —
+    precheck recognises a file however its path is spelled, and the summary stays small even when entries are long.
     <a href="https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md">See what changed →</a>
   </p>
 
@@ -163,7 +163,7 @@ cd your-project && pjm init
 |---|---|
 | **[Complete setup guide](https://projectmem.dev/blog/projectmem-complete-guide-ai-coding-agent-memory)** | The full walkthrough on the web — install, MCP setup per client, `pjm doctor`, your first logged issue, and both dashboards. Every terminal output is captured from a real run. |
 | **[TUTORIAL.md](https://github.com/riponcm/projectmem/blob/main/TUTORIAL.md)** | 15-minute step-by-step walkthrough — set up projectmem on your own project, watch the lifecycle, see the pre-commit warning fire. |
-| **[CHANGELOG.md](https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md)** | Release history. Latest: v0.3.4 — fixes for three community reports, a bounded summary, and a time-zone regression from 0.3.3. |
+| **[CHANGELOG.md](https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md)** | Release history. Latest: v0.3.5 — precheck matches every spelling of a path, and long entries no longer bloat the summary. |
 | **[Research paper (arXiv:2606.12329)](https://arxiv.org/abs/2606.12329)** | *PROJECTMEM: A Local-First, Event-Sourced Memory and Judgment Layer for AI Coding Agents* — the peer-readable version: design, Memory-as-Governance framing, capability comparison, and the 207-event dogfooding study. |
 | **[LICENSE](https://github.com/riponcm/projectmem/blob/main/LICENSE)** | MIT |
 
@@ -199,6 +199,30 @@ That's it. `pjm init` installs three git hooks (pre-commit warnings, post-commit
 > The canonical command is `projectmem`. A `pjm` alias is installed for speed.
 
 ---
+
+## ✨ New in 0.3.5 — warnings for every spelling, and a summary that stays small
+
+**Precheck recognises a file however its path is spelled.** Events store
+project-relative paths, so asking about `./src/auth.py`, an absolute path, a
+path through a symlinked folder or a Windows `C:\` path matched nothing, and
+precheck called a file with known failures "Safe to modify". Every spelling now
+gets the same warnings, and checking is faster on large logs.
+`get_issue("1")` and `get_issue("#1")` find issue 0001.
+([#26](https://github.com/riponcm/projectmem/pull/26))
+
+**Long entries no longer bloat the summary.** 0.3.4 capped how many entries
+the summary shows, not how long each one is. Records are now clipped at 300
+characters, and a fixed issue takes one line. On a real 238-event project the
+summary went from 8,974 tokens to 3,458.
+([#29](https://github.com/riponcm/projectmem/issues/29),
+[#30](https://github.com/riponcm/projectmem/pull/30))
+
+**Upgrading? Run `pjm init` once in each project.** The instructions now ask
+agents for shorter records, and `pjm init` refreshes `AI_INSTRUCTIONS.md`,
+keeping your previous copy as `AI_INSTRUCTIONS.md.bak`.
+
+The #26 fixes were contributed by [@vishalhabib99](https://github.com/vishalhabib99),
+and #29 was reported and fixed by [@bigfree](https://github.com/bigfree).
 
 ## ✨ New in 0.3.4 — memory that stays small, and warnings you can trust
 
@@ -448,15 +472,19 @@ Want a source supported? [Open an issue](https://github.com/riponcm/projectmem/i
 
 The architecture is built around one rule: **AI reads small, distilled files. Tools generate them from the big raw log.**
 
-*Estimates, not benchmarks.* Measured on the 0.3.4 summary itself: about 250
-tokens for a young project and about 1,100 for one with 25 issues and 60
-decisions; more when many issues are open.
+*Measured on 0.3.5 with the `cl100k_base` tokenizer, on nine real projects of
+9 to 238 events.* At session start an agent reads three files.
+`AI_INSTRUCTIONS.md` is about 3,300 tokens and costs the same in every project.
+`summary.md` ranged from about 400 to 3,500 tokens, and `PROJECT_MAP.md` from
+about 100 to 900. A synthetic worst case with 40 open issues and long entries in
+every record brings the summary to about 6,300. The baseline and `pjm wrap` rows
+are estimates.
 
-| Access mode | Tokens / session (estimate) | How it works |
+| Access mode | Tokens / session | How it works |
 |---|---|---|
 | No projectmem (baseline) | 5,000 – 20,000+ | AI re-reads source files every session |
-| Universal Mode (markdown) | ~2,500 | AI reads 3 small distilled files once |
-| **MCP Mode** *(recommended)* | **~800 – 1,500** | AI calls `get_summary()`, then `get_issue(issue_id)` only when relevant |
+| Universal Mode (markdown) | ~3,700 – 7,600 | AI reads 3 distilled files once |
+| **MCP Mode** *(recommended)* | **~3,700 – 7,600** at session start | AI calls `get_instructions()`, `get_summary()` and `get_project_map()`, then `get_issue(issue_id)` or `precheck_file(file_path)` only when relevant |
 | `pjm wrap` (pre-injection) | 500 – 2,000 | Pre-generated, you set the budget |
 
 **AI never reads `events.jsonl` directly.** That file is for tools (`pjm score`, `pjm context`, `pjm wrap`). Tools distill the raw log into compact AI-readable summaries.

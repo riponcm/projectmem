@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.5
+
+**Two community fixes: precheck recognises a file however its path is spelled, and the summary stays small even when entries are long.**
+
+### Fixed
+
+- **`precheck_file` called a file with known failures "Safe to modify" when its path was spelled differently.** Events store project-relative paths, so `./src/auth.py`, an absolute path, a path through a symlinked folder, a backslash path or a Windows `C:\` path matched nothing. Every path, the one being checked and the ones in the log, is now made project-relative before matching, and two spellings of one file give one set of warnings. A decision logged at an absolute path is now also judged stale for the right file. Matching got faster as well: checking 5 files against a 3,000-event log went from 663 ms to 163 ms. ([#26](https://github.com/riponcm/projectmem/pull/26))
+
+- **`get_issue` missed unpadded ids and passed raw input to a file glob.** `get_issue("1")` and `get_issue("#1")` now find issue 0001, as `pjm fix` does, and backfilled `legacy_…` ids work. Input containing `*`, `?` or `[` is refused instead of matching some other issue. ([#26](https://github.com/riponcm/projectmem/pull/26))
+
+- **`summary.md` could still cost ~9,000–12,000 tokens on an aged project.** 0.3.4 capped how many entries the summary shows, but not how long each one is. Each record is now clipped at 300 characters, with line breaks folded first and locations kept whole. A fixed issue is one line (id, title, location), and its details are one `get_issue` call away. Open issues still show their last 3 failed or partial attempts. On a real 238-event project, the summary went from 8,974 to 3,458 tokens. ([#29](https://github.com/riponcm/projectmem/issues/29), [#30](https://github.com/riponcm/projectmem/pull/30))
+
+- **`precheck_file("")` reported the whole log.** An empty string is part of every summary, so a blank path matched every failed attempt and open issue. Blank paths are now ignored, and whitespace around a path is trimmed.
+
+- A whitespace-only location rendered as `[]` in the summary and hid the fix's location. It now counts as no location.
+
+### Changed
+
+- **`AI_INSTRUCTIONS.md` asks for shorter records:** issue titles under 140 characters, everything else under 300. The five write tools say the same in their argument descriptions. Because the template changed, run `pjm init` once in each project. It refreshes the file and keeps your previous copy as `AI_INSTRUCTIONS.md.bak`, so merge back anything you added by hand.
+
+- **Token figures corrected.** The guidance said `get_summary` costs "a few hundred to ~1,500 tokens". That was measured on short synthetic entries, and a real project with long entries was far above it ([#29](https://github.com/riponcm/projectmem/issues/29)). It now says a few hundred on a young project and a few thousand on an aged one. The README's per-session estimate also left out `get_instructions`, which agents read first in every session and which is about 3,300 tokens on its own. The table now counts it and gives measured figures: on nine real projects, the three files read at session start total about 3,700 to 7,600 tokens.
+
+The fixes for #26 were contributed by [@vishalhabib99](https://github.com/vishalhabib99), and #29 was reported and fixed by [@bigfree](https://github.com/bigfree).
+
 ## 0.3.4
 
 **Three reports, three community fixes, and six more bugs found by checking them.** Each report below was reproduced end to end before it was fixed, and each fix was reviewed by someone other than its author.

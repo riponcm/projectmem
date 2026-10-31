@@ -15,8 +15,8 @@ authors:
   - family-names: Malo
     given-names: Ripon Chandra
     affiliation: University of Utah
-version: 0.3.4
-date-released: 2026-10-02
+version: 0.3.5
+date-released: 2026-10-30
 license: MIT
 repository-code: "https://github.com/riponcm/projectmem"
 url: "https://projectmem.dev"

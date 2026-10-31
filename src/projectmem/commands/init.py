@@ -182,7 +182,7 @@ def _claude_md_bridge(project_name: str | None = None) -> str:
         "summary file regenerates from `events.jsonl` automatically — write\n"
         "via the MCP tools and the summary will follow.\n\n"
         "Do not re-scan source files when MCP tools can give you the same\n"
-        "answer in a few hundred tokens instead of thousands. This is not optional.\n"
+        "answer for a fraction of the tokens a re-scan costs. This is not optional.\n"
         f"{_CLAUDE_MD_BRIDGE_END}\n"
     )
 

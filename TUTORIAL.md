@@ -243,5 +243,5 @@ In about 15 minutes you exercised every part of projectmem:
 
 ---
 
-*Last updated for projectmem 0.3.4 — see the [changelog](CHANGELOG.md) for what
+*Last updated for projectmem 0.3.5 — see the [changelog](CHANGELOG.md) for what
 changed since.*
