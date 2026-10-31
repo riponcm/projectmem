@@ -333,3 +333,18 @@ def test_a_multi_line_record_stays_on_one_summary_line(tmp_path):
 
     assert "- first line ## not a heading third [a.py ## not a heading either]" in summary
     assert "\n## not a heading" not in summary
+
+
+def test_a_blank_location_falls_back_to_the_fixs(tmp_path) -> None:
+    """A whitespace-only location rendered as ` []` and, being truthy,
+    hid the fix's location on the one-line DONE entry."""
+    from projectmem.models import Event
+    from projectmem.summary import build_summary
+
+    events = [
+        Event(type="issue", summary="blank location", issue_id="0001", location="   "),
+        Event(type="fix", summary="patched", issue_id="0001", location="src/x.py"),
+    ]
+    text = build_summary(events, tmp_path)
+    assert "- [DONE] #0001 blank location [src/x.py] (fixed)" in text
+    assert "[]" not in text

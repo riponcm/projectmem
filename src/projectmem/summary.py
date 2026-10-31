@@ -47,7 +47,8 @@ def _clip(text: str) -> str:
 
 
 def _loc(location: str | None) -> str:
-    return f" [{' '.join(location.split())}]" if location else ""
+    location = " ".join((location or "").split())
+    return f" [{location}]" if location else ""
 
 
 def _issue_sort_key(item: tuple[str, list[Event]]) -> tuple[int, str]:
