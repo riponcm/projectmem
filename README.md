@@ -35,7 +35,7 @@
 
   <br />
 
-  <img src="https://raw.githubusercontent.com/projectmem/projectmemdoc/main/demo/precheck-warning.gif" alt="projectmem pre-commit warning demo" width="720" />
+https://github.com/user-attachments/assets/e055988e-7253-4ba9-92fc-95d3d4bcd763
 
   <br /><br />
 
