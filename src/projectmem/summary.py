@@ -5,7 +5,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-from projectmem.models import Event, superseded_ids
+from projectmem.models import Event, location_to_file, superseded_ids
 from projectmem.storage import (
     RECORD_CHARS,
     issues_dir,
@@ -277,19 +277,22 @@ def group_issue_events(events: list[Event]) -> dict[str, list[Event]]:
     return dict(issues)
 
 
+MEMORY_DIR_PREFIX = ".projectmem/"
+
+
 def collect_files(events: list[Event]) -> list[str]:
-    seen: set[str] = set()
-    files: list[str] = []
+    counts: dict[str, int] = defaultdict(int)
     for event in events:
-        for explicit in event.files:
-            if explicit not in seen:
-                seen.add(explicit)
-                files.append(explicit)
-        for inferred in infer_file_mentions(event.summary):
-            if inferred not in seen:
-                seen.add(inferred)
-                files.append(inferred)
-    return files
+        mentioned = [
+            *event.files,
+            *([event.location] if event.location else []),
+            *infer_file_mentions(event.summary),
+        ]
+        paths = {location_to_file(" ".join(path.split())) for path in mentioned}
+        for path in paths:
+            if path and not path.startswith(MEMORY_DIR_PREFIX):
+                counts[path] += 1
+    return sorted(counts, key=lambda path: -counts[path])
 
 
 def infer_file_mentions(text: str) -> list[str]:

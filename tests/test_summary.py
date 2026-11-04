@@ -34,7 +34,7 @@ def test_summary_and_issue_file_are_regenerated(tmp_path, monkeypatch):
     assert "# projectmem" in summary
     assert "[DONE] #0001 login redirect loop" in summary
     assert "Keep redirect handling in one middleware" in summary
-    assert "`auth/redirect.py:88`" in summary
+    assert "`auth/redirect.py`" in summary
     assert len(issue_files) == 1
     issue_file = issue_files[0].read_text(encoding="utf-8")
     assert "login redirect loop" in issue_file
@@ -348,3 +348,67 @@ def test_a_blank_location_falls_back_to_the_fixs(tmp_path) -> None:
     text = build_summary(events, tmp_path)
     assert "- [DONE] #0001 blank location [src/x.py] (fixed)" in text
     assert "[]" not in text
+
+
+def _listed_key_files(summary: str) -> list[str]:
+    return [line for line in _section(summary, "Key files").splitlines() if line.startswith("- `")]
+
+
+def test_key_files_ignore_version_numbers_and_identifiers(tmp_path):
+    from projectmem.models import Event
+    from projectmem.summary import build_summary
+
+    events = [Event(type="note", summary="bumped to 7.x and 23.1.2 via ts.readConfigFile")]
+
+    assert _listed_key_files(build_summary(events, tmp_path)) == []
+
+
+def test_key_files_keep_root_level_files_mentioned_in_text(tmp_path):
+    from projectmem.models import Event
+    from projectmem.summary import build_summary
+
+    events = [Event(type="note", summary="pinned the version in pyproject.toml")]
+
+    assert _listed_key_files(build_summary(events, tmp_path)) == ["- `pyproject.toml`"]
+
+
+def test_key_files_include_locations_that_name_a_file(tmp_path):
+    from projectmem.models import Event
+    from projectmem.summary import build_summary
+
+    events = [
+        Event(type="note", summary="gotcha: truncates at 72 bytes", location="bcrypt"),
+        Event(type="decision", summary="keep one entry point", location="AuthService.login"),
+        Event(type="note", summary="guard the redirect", location="src/auth.py"),
+    ]
+
+    assert _listed_key_files(build_summary(events, tmp_path)) == ["- `src/auth.py`"]
+
+
+def test_key_files_merge_line_suffixes_into_one_file(tmp_path):
+    from projectmem.models import Event
+    from projectmem.summary import build_summary
+
+    events = [
+        Event(type="note", summary="one", location="src/auth.py:42"),
+        Event(type="note", summary="two, see src/auth.py:7"),
+    ]
+
+    assert _listed_key_files(build_summary(events, tmp_path)) == ["- `src/auth.py`"]
+
+
+def test_key_files_rank_by_event_count_and_skip_memory_files(tmp_path):
+    from projectmem.models import Event
+    from projectmem.summary import build_summary
+
+    events = [
+        Event(type="note", summary="one", location="src/rare.py"),
+        Event(type="note", summary="two", location="src/busy.py"),
+        Event(type="note", summary="three", files=["src/busy.py"]),
+        Event(type="note", summary="four", location=".projectmem/summary.md"),
+    ]
+
+    assert _listed_key_files(build_summary(events, tmp_path)) == [
+        "- `src/busy.py`",
+        "- `src/rare.py`",
+    ]
