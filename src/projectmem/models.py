@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -121,6 +123,11 @@ VALID_CAPTURE_SOURCES = {
 VALID_CONFIDENCE_LEVELS = {"high", "medium", "low"}
 
 
+def stable_event_id(data: dict[str, Any]) -> str:
+    content = json.dumps(data, sort_keys=True, default=str).encode("utf-8")
+    return f"evt_{hashlib.sha1(content).hexdigest()[:20]}"
+
+
 @dataclass
 class Event:
     type: str
@@ -164,7 +171,7 @@ class Event:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Event":
         return cls(
-            id=data.get("id") or f"evt_{uuid4().hex[:20]}",
+            id=data.get("id") or stable_event_id(data),
             timestamp=normalize_timestamp(data.get("timestamp")) if data.get("timestamp") else utc_now_iso(),
             type=data["type"],
             issue_id=data.get("issue_id"),

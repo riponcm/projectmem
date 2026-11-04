@@ -7,7 +7,7 @@ from pathlib import Path
 
 from projectmem.models import Event, superseded_ids
 from projectmem.storage import (
-    RECORD_CHARS,
+    clip_record,
     issues_dir,
     project_map_path,
     read_events,
@@ -34,17 +34,6 @@ _PLACEHOLDER_PHRASES = (
 RECENT_FIXED_ISSUES = 10
 RECENT_DECISIONS = 15
 OPEN_IN_FULL = 20
-
-def clip_record(text: str) -> str:
-    text = " ".join(text.split())
-    if len(text) <= RECORD_CHARS:
-        return text
-    head = text[: RECORD_CHARS - 3]
-    boundary = head.rfind(" ", RECORD_CHARS // 2 + 1)
-    if boundary != -1:
-        head = head[:boundary]
-    return head.rstrip(" ,;:") + "..."
-
 
 def _loc(location: str | None) -> str:
     location = " ".join((location or "").split())

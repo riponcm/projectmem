@@ -48,7 +48,6 @@ except ImportError:  # mcp >= 2.0
 from pydantic import Field
 
 from projectmem.commands import attempt, decision, fix, log, note
-from projectmem.summary import clip_record
 from projectmem.storage import (
     RECORD_CHARS,
     TITLE_CHARS,
@@ -404,12 +403,12 @@ def get_issue(
 def search_events(
     query: Annotated[str, Field(
         description="Case-insensitive substring matched against each "
-                    "event's summary and notes. Plain text only — no "
-                    "regex or boolean operators."
+                    "event's summary, notes, location and files. Plain text "
+                    "only — no regex or boolean operators."
     )],
     limit: Annotated[int, Field(
-        description="Maximum number of matching events to return "
-                    "(most recent first). Defaults to 10. Recommended "
+        description="How many of the most recent matches to return, "
+                    "listed oldest first. Defaults to 10. Recommended "
                     "range: 1-100.",
         ge=1, le=100,
     )] = 10,
@@ -423,27 +422,23 @@ def search_events(
     """Plain-text search across all logged events.
 
     Token-efficient alternative to get_summary when you only need events
-    matching a keyword. Returns matching event summaries with type and
-    timestamp.
+    matching a keyword. Each match shows its type, issue, event id (what
+    add_decision's `supersedes` takes) and date, and its text clipped to
+    RECORD_CHARS around the match; a match found only in notes shows the
+    notes. Retired decisions are marked (superseded). Pass `full=True` for
+    whole texts once the query is narrow.
 
-    Read-only. Case-insensitive substring matching against each event's
-    summary and notes. Empty result returns a friendly message, not an
-    error."""
-    events = read_events(_root_for(project))
-    q = query.lower()
-    matches = []
-    for e in events:
-        if q in e.summary.lower() or (e.notes and q in e.notes.lower()):
-            matches.append(e)
-    matches = matches[-limit:]
+    Read-only. Empty result returns a friendly message, not an error."""
+    from projectmem import search
+    from projectmem.models import superseded_ids
+
+    root = _root_for(project)
+    matches = search.search_events(query, root=root)[-limit:]
     if not matches:
         return f"No events match '{query}'."
+    retired = superseded_ids(read_events(root))
     lines = [f"Found {len(matches)} match(es) for '{query}':"]
-    for e in matches:
-        outcome = f" ({e.outcome})" if e.outcome else ""
-        loc = f" @ {e.location}" if e.location else ""
-        text = e.summary if full else clip_record(e.summary)
-        lines.append(f"  [{e.type}{outcome}] {e.id} {e.timestamp[:10]}: {text}{loc}")
+    lines.extend(search.match_line(e, query, retired, full) for e in matches)
     return "\n".join(lines)
 
 
@@ -721,14 +716,15 @@ def add_decision(
     should know about. Decisions show up in `summary.md` and in
     `pjm wrap` context blocks.
 
-    Side effects: appends a `decision` event and updates summary.md.
+    Replies with the new decision's event id, the id a later `supersedes`
+    takes. Side effects: appends a `decision` event and updates summary.md.
     Decisions are append-only — to revise, pass `supersedes` with the old
     decision's event id instead of editing history."""
     target = _target(project)
     event = decision.run(
         summary, location=location, supersedes=supersedes, root=target.root
     )
-    retired = f" (supersedes {supersedes})" if supersedes else ""
+    retired = f" (supersedes {event.supersedes})" if event.supersedes else ""
     return f"Recorded decision {event.id} → {target.name}{retired}"
 
 
@@ -754,7 +750,8 @@ def add_note(
     issue or decision. Notes survive across sessions and appear in
     wrap context blocks.
 
-    Side effects: appends a `note` event. Notes prefixed `gotcha:`,
+    Replies with the note's event id. Side effects: appends a `note`
+    event. Notes prefixed `gotcha:`,
     `lesson:`, or `warning:` are eligible for auto-promotion to
     ~/.projectmem/global/ for cross-project recall (L-046)."""
     target = _target(project)

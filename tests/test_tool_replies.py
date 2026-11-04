@@ -67,3 +67,57 @@ def test_search_full_returns_whole_records(root):
     append_event(Event(type="note", summary=LONG_TEXT), root)
 
     assert "word119" in mcp_server.search_events("gotcha", full=True)
+
+
+def test_add_decision_reply_resolves_a_supersedes_prefix(root):
+    mcp_server.add_decision("use bcrypt for passwords")
+    old_id = _newest_id(root)
+
+    reply = mcp_server.add_decision("use argon2 for passwords", supersedes=old_id[4:12])
+
+    assert reply.endswith(f"(supersedes {old_id})")
+
+
+def test_search_marks_superseded_decisions(root):
+    mcp_server.add_decision("hash passwords with bcrypt")
+    old_id = _newest_id(root)
+    mcp_server.add_decision("hash passwords with argon2", supersedes=old_id)
+
+    reply = mcp_server.search_events("hash passwords")
+    retired = next(line for line in reply.splitlines() if old_id in line)
+    current = next(line for line in reply.splitlines() if "argon2" in line)
+
+    assert retired.endswith("(superseded)")
+    assert not current.endswith("(superseded)")
+
+
+def test_search_shows_the_part_that_matched_past_the_clip(root):
+    text = " ".join(f"filler{i}" for i in range(80)) + " the argon2 migration broke logins"
+    append_event(Event(type="note", summary=text), root)
+
+    reply = mcp_server.search_events("argon2")
+
+    assert "argon2 migration" in reply
+    assert "filler0 " not in reply
+
+
+def test_search_shows_a_match_found_only_in_notes(root):
+    append_event(
+        Event(type="note", summary="queue tuning", notes="retry storm after the argon2 upgrade"),
+        root,
+    )
+
+    reply = mcp_server.search_events("argon2")
+
+    assert "notes: retry storm after the argon2 upgrade" in reply
+
+
+def test_search_full_keeps_one_match_per_line(root):
+    append_event(Event(type="note", summary="multi\nline\nterm note", location="src/a.py\n:3"), root)
+
+    reply = mcp_server.search_events("term", full=True)
+    lines = [line for line in reply.splitlines() if line.startswith("  [")]
+
+    assert len(lines) == 1
+    assert "multi line term note" in lines[0]
+    assert lines[0].endswith("@ src/a.py :3")
