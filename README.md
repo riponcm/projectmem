@@ -359,7 +359,7 @@ pjm project use ossdrop   # the default when a call names no project
 
 ```
 log_issue(summary="stars come back empty", project="ossdrop")
-→ Logged issue #0019 → ossdrop: stars come back empty
+→ Logged issue #0019 → ossdrop
 ```
 
 Every write names the project it landed in — in a shared server, the dangerous
@@ -505,7 +505,7 @@ Your agent picks the project per call:
 
 ```
 log_issue(summary="stars come back empty", project="ossdrop")
-→ Logged issue #0019 → ossdrop: stars come back empty
+→ Logged issue #0019 → ossdrop
 ```
 
 **Every write says where it landed.** That echo is the point: in a one-project
