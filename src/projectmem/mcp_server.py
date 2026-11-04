@@ -48,6 +48,7 @@ except ImportError:  # mcp >= 2.0
 from pydantic import Field
 
 from projectmem.commands import attempt, decision, fix, log, note
+from projectmem.summary import clip_record
 from projectmem.storage import (
     RECORD_CHARS,
     TITLE_CHARS,
@@ -412,6 +413,11 @@ def search_events(
                     "range: 1-100.",
         ge=1, le=100,
     )] = 10,
+    full: Annotated[bool, Field(
+        description="Return each match's whole text. By default a match is "
+                    f"clipped to {RECORD_CHARS} characters; ask for full text "
+                    "once the query is narrow."
+    )] = False,
     project: ProjectArg = None,
 ) -> str:
     """Plain-text search across all logged events.
@@ -436,7 +442,8 @@ def search_events(
     for e in matches:
         outcome = f" ({e.outcome})" if e.outcome else ""
         loc = f" @ {e.location}" if e.location else ""
-        lines.append(f"  [{e.type}{outcome}] {e.summary}{loc}")
+        text = e.summary if full else clip_record(e.summary)
+        lines.append(f"  [{e.type}{outcome}] {e.id} {e.timestamp[:10]}: {text}{loc}")
     return "\n".join(lines)
 
 
@@ -580,7 +587,7 @@ def log_issue(
     record_attempt calls."""
     target = _target(project)
     event = log.run(summary, location=location, root=target.root)
-    return f"Logged issue #{event.issue_id} → {target.name}: {summary}"
+    return f"Logged issue #{event.issue_id} → {target.name}"
 
 
 @mcp.tool()
@@ -633,7 +640,7 @@ def record_attempt(
         location=location, issue=issue_id, auto_issue=True, root=target.root,
     )
     return (
-        f"Recorded {outcome} attempt on #{event.issue_id} → {target.name}: {summary}"
+        f"Recorded {outcome} attempt on #{event.issue_id} → {target.name}"
     )
 
 
@@ -680,7 +687,7 @@ def record_fix(
     marker is cleared only when the active issue is the issue being fixed."""
     target = _target(project)
     event = fix.run(summary, location=location, issue=issue_id, root=target.root)
-    return f"Fixed issue #{event.issue_id} → {target.name}: {summary}"
+    return f"Fixed issue #{event.issue_id} → {target.name}"
 
 
 @mcp.tool()
@@ -718,15 +725,11 @@ def add_decision(
     Decisions are append-only — to revise, pass `supersedes` with the old
     decision's event id instead of editing history."""
     target = _target(project)
-    decision.run(
+    event = decision.run(
         summary, location=location, supersedes=supersedes, root=target.root
     )
-    if supersedes:
-        return (
-            f"Recorded decision → {target.name} "
-            f"(supersedes {supersedes}): {summary}"
-        )
-    return f"Recorded decision → {target.name}: {summary}"
+    retired = f" (supersedes {supersedes})" if supersedes else ""
+    return f"Recorded decision {event.id} → {target.name}{retired}"
 
 
 @mcp.tool()
@@ -755,8 +758,8 @@ def add_note(
     `lesson:`, or `warning:` are eligible for auto-promotion to
     ~/.projectmem/global/ for cross-project recall (L-046)."""
     target = _target(project)
-    note.run(summary, location=location, root=target.root)
-    return f"Recorded note → {target.name}: {summary}"
+    event = note.run(summary, location=location, root=target.root)
+    return f"Recorded note {event.id} → {target.name}"
 
 
 # ════════════════════════════════════════════════════════════════════════
