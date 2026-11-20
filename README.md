@@ -119,6 +119,16 @@ https://github.com/user-attachments/assets/e055988e-7253-4ba9-92fc-95d3d4bcd763
 > Your agent reads what the project already learned instead of rediscovering it,
 > and writes down what it finds. Fewer tokens, no repeated dead ends, memory that
 > outlives the session.
+>
+> **6. Using Claude Code or Codex? Show lessons before every edit** *(optional, once)*
+>
+> ```bash
+> pjm hooks install --agent claude-code   # or: --agent codex
+> ```
+>
+> Before your agent edits a file, it sees that file's open issues, failed
+> attempts and decisions — without having to remember to ask. Files with no
+> lessons add nothing. It starts working in your next session.
 
 ---
 
@@ -757,7 +767,7 @@ Three things to know about this block:
 
 - **Use the absolute path to `python`** (run `which python` to find yours). Codex subprocesses don't reliably inherit your shell `PATH`.
 - **You no longer need `--root` or `cwd`.** Earlier releases passed `--root` as defense in depth (the `cwd` field does appear to work in Codex, unlike Claude Desktop and Cursor). Since 0.3.0 the registry makes both unnecessary — add `"--root", "/absolute/path/to/your/project"` to `args` only if you want this server locked to a single repo.
-- **Set your reasoning effort to `medium` or higher.** On low-reasoning Codex skips `get_instructions` from the session-start trio, which can cause the AI to miss the Setup Mode workflow rules. Medium+ honors the full trio automatically.
+- **Set your reasoning effort to `medium` or higher.** On low reasoning, Codex was seen skipping the session-start rules call (`get_instructions`, now part of `start_session()`), which can cause the AI to miss the Setup Mode workflow rules.
 
 **Validate the TOML:**
 
@@ -769,7 +779,7 @@ Should print `OK`. If not, the parser tells you the offending line.
 
 **Then fully quit Codex (Cmd+Q on Mac) and reopen.** Same cold-start rule as every other MCP client. Codex MCP servers spawn lazily on the first tool call in a chat session — if you don't see the process in `ps aux` right after reopening, send any message to a Codex chat and check again.
 
-**Reasoning-effort note:** Codex's mode selector is at the bottom of the chat input. Set it to `medium` (not `low`) for the full session-start trio behavior. Once set, it persists per-session.
+**Reasoning-effort note:** Codex's mode selector is at the bottom of the chat input. Set it to `medium` (not `low`) so the session-start call is not skipped. Once set, it persists per-session.
 
 ### First-run permission prompts
 
@@ -883,7 +893,7 @@ All 19 tools your AI can call. Every repo tool takes an optional
 - `events.jsonl → summary.md` records what *happened* (append-only, never rewritten).
 - `plan.md` records what you *intend* — and you (or the AI) edit it directly, like `PROJECT_MAP.md`.
 
-Your AI reads it at session start via `get_plan()` and updates it in place: adding ideas, checking items off, moving finished work down to **Shipped**. A plan is never logged as an event, so intent stays cleanly out of your memory's audit trail. `pjm plan` prints it; `pjm plan "auto-batch the exporter"` appends an idea. It's committed (not gitignored) so intent is shared with your team.
+Your AI reads it at session start — `start_session()` includes the current plan, and `get_plan()` returns the whole file — and updates it in place: adding ideas, checking items off, moving finished work down to **Shipped**. A plan is never logged as an event, so intent stays cleanly out of your memory's audit trail. `pjm plan` prints it; `pjm plan "auto-batch the exporter"` appends an idea. It's committed (not gitignored) so intent is shared with your team.
 
 ## Example: Pre-Commit Warnings in Action
 
