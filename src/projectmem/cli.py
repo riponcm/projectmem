@@ -15,6 +15,7 @@ from projectmem.commands import doctor as doctor_command
 from projectmem.commands import export as export_command
 from projectmem.commands import global_cmd as global_command
 from projectmem.commands import fix as fix_command
+from projectmem.commands import agent_hooks as agent_hooks_command
 from projectmem.commands import hooks as hooks_command
 from projectmem.commands import init as init_command
 from projectmem.commands import instructions as instructions_command
@@ -309,9 +310,24 @@ def backfill(limit: int = typer.Option(20, help="Number of commits to scan.")) -
 
 
 @app.command()
-def hooks(action: str = typer.Argument("install", help="Action: install or uninstall.")) -> None:
-    """Manage projectmem git hooks (install/uninstall)."""
-    hooks_command.run(action=action)
+def hooks(
+    action: str = typer.Argument("install", help="Action: install or uninstall."),
+    agent: str = typer.Option(
+        "", "--agent",
+        help="Install the edit hook for an agent instead of the git hooks: "
+             "claude-code or codex.",
+    ),
+    project: bool = typer.Option(
+        False, "--project",
+        help="With --agent: write the current project's config instead of your "
+             "user config (~/.claude/settings.json, ~/.codex/hooks.json).",
+    ),
+) -> None:
+    """Manage projectmem git hooks, or with --agent the edit hook (install/uninstall)."""
+    if agent:
+        agent_hooks_command.run(action=action, agent=agent, project=project)
+    else:
+        hooks_command.run(action=action)
 
 
 @app.command("_auto-capture", hidden=True)

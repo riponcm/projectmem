@@ -298,8 +298,9 @@ def test_server_builds_when_fastmcp_is_gone(monkeypatch, tmp_path):
 
     assert isinstance(module.mcp, _StubServer)
     assert module.mcp.name == "projectmem"
-    # 15 memory tools + list_projects / current_project for global routing
-    assert len(module.mcp.tools) == 18
+    # 17 memory tools (start_session and precheck_files are new in 0.3.6)
+    # + list_projects / current_project for global routing
+    assert len(module.mcp.tools) == 19
     assert "list_projects" in module.mcp.tools
 
 
