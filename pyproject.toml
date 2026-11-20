@@ -59,6 +59,7 @@ Paper = "https://arxiv.org/abs/2606.12329"
 projectmem = "projectmem.cli:main"
 pjm = "projectmem.cli:main"
 pjm-mcp = "projectmem.mcp_server:main"
+pjm-edit-hook = "projectmem.edit_hook:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/projectmem"]
