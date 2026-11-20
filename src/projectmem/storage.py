@@ -741,6 +741,32 @@ def read_current_issue(root: Path | None = None) -> str | None:
     return text or None
 
 
+OPEN_ISSUES_LISTED = 10
+
+
+def open_issue_ids(events: list[Event]) -> list[str]:
+    closed = {e.issue_id for e in events if e.type == "fix" and e.issue_id}
+    newest_first = [
+        e.issue_id
+        for e in reversed(events)
+        if e.type == "issue" and e.issue_id and e.issue_id not in closed
+    ]
+    return list(dict.fromkeys(newest_first))
+
+
+def sole_open_issue(events: list[Event]) -> str | None:
+    open_ids = open_issue_ids(events)
+    if len(open_ids) > 1:
+        shown = ", ".join(f"#{i}" for i in open_ids[:OPEN_ISSUES_LISTED])
+        hidden = len(open_ids) - OPEN_ISSUES_LISTED
+        more = f" and {hidden} more" if hidden > 0 else ""
+        raise ProjectMemError(
+            f"{len(open_ids)} issues are open, so pass issue_id (the id "
+            f"log_issue returned). Open issues, newest first: {shown}{more}."
+        )
+    return open_ids[0] if open_ids else None
+
+
 def normalize_issue_id(issue_id: str | None) -> str | None:
     """Normalize issue IDs so `1`, `001`, and `0001` all become `0001`."""
     if issue_id is None:

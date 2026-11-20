@@ -56,6 +56,7 @@ from projectmem.storage import (
     project_map_path,
     plan_path,
     read_events,
+    sole_open_issue,
     summary_path,
 )
 
@@ -619,10 +620,12 @@ def record_attempt(
     MANDATORY: call IMMEDIATELY after each distinct fix attempt — do NOT
     batch multiple attempts into one call.
 
-    `outcome` must be 'worked', 'failed', or 'partial'. Pass `issue_id`
-    explicitly to attach to a specific issue; otherwise the attempt
-    attaches to the active issue. If no active issue exists, an implicit
-    parent issue is auto-created from this attempt's text (L-008).
+    `outcome` must be 'worked', 'failed', or 'partial'. Pass the `issue_id`
+    that log_issue returned. It may be omitted only while exactly one issue
+    is open; with several open the call is refused and lists them, because
+    parallel sessions and subagents would otherwise write onto each other's
+    issues. With no open issue, an implicit parent issue is auto-created
+    from this attempt's text (L-008).
 
     Side effects: appends an `attempt` event and updates the issue file.
     Does NOT close the issue — call record_fix for that."""
@@ -632,7 +635,9 @@ def record_attempt(
     target = _target(project)
     event = attempt.run(
         summary, worked=worked, failed=failed, partial=partial,
-        location=location, issue=issue_id, auto_issue=True, root=target.root,
+        location=location,
+        issue=issue_id or sole_open_issue(read_events(target.root)),
+        auto_issue=True, root=target.root,
     )
     return (
         f"Recorded {outcome} attempt on #{event.issue_id} → {target.name}"
@@ -676,12 +681,17 @@ def record_fix(
     or the user confirmed.
 
     If `issue_id` is provided, the fix is attached to that specific issue.
-    If `issue_id` is omitted, the active issue is closed.
+    `issue_id` may be omitted only while exactly one issue is open; with
+    several open the call is refused and lists them.
 
     Side effects: appends a `fix` event and updates summary.md. The active-issue
     marker is cleared only when the active issue is the issue being fixed."""
     target = _target(project)
-    event = fix.run(summary, location=location, issue=issue_id, root=target.root)
+    event = fix.run(
+        summary, location=location,
+        issue=issue_id or sole_open_issue(read_events(target.root)),
+        root=target.root,
+    )
     return f"Fixed issue #{event.issue_id} → {target.name}"
 
 
