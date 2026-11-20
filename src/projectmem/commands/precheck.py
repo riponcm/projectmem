@@ -37,6 +37,8 @@ HIGH_CHURN_THRESHOLD = 4         # changes in CHURN_WINDOW_COMMITS to trigger
 CHURN_WINDOW_COMMITS = 7         # rolling window for churn detection
 FAILED_ATTEMPT_BLOCK_COUNT = 3   # 3+ failed attempts → block (at --level block)
 RECENT_DAYS = 30                 # only consider events newer than this
+LESSON_OUTCOMES = ("failed", "partial")
+LESSON_MARKS = {"failed": "x", "partial": "~"}
 
 # ── Severity ──
 SEVERITY_INFO = "info"
@@ -311,26 +313,33 @@ def _analyze_files(
 
         # ── Check 1: Failed attempts ──
         failed_attempts = [
-            e for e in recent if e.type == "attempt" and e.outcome == "failed"
+            e for e in file_events
+            if e.type == "attempt" and e.outcome in LESSON_OUTCOMES
         ]
         if failed_attempts:
             count = len(failed_attempts)
-            severity = SEVERITY_BLOCK if count >= FAILED_ATTEMPT_BLOCK_COUNT else SEVERITY_WARN
+            failed_count = sum(e.outcome == "failed" for e in failed_attempts)
+            severity = (
+                SEVERITY_BLOCK if failed_count >= FAILED_ATTEMPT_BLOCK_COUNT else SEVERITY_WARN
+            )
             # List the dead ends themselves (0.1.4), not just a count — the
             # whole point of memory-of-failure is telling the next session
             # WHAT not to retry. Up to 3 most recent, newest first.
             details = []
             for attempt in reversed(failed_attempts[-3:]):
+                mark = LESSON_MARKS[attempt.outcome or "failed"]
                 details.append(
-                    f"x {attempt.summary[:90]} ({_age(attempt.timestamp)})"
+                    f"{mark} {attempt.summary[:90]} ({_age(attempt.timestamp)})"
                 )
             if count > 3:
-                details.append(f"  ... and {count - 3} more (pjm search --failed-only)")
+                details.append(f"  ... and {count - 3} more{_hidden_lessons_hint(failed_attempts[:-3])}")
+            partial_count = count - failed_count
+            partly = f", {partial_count} only partly worked" if partial_count else ""
             warnings.append({
                 "file": file_path,
                 "severity": severity,
                 "type": "failed_attempts",
-                "title": f"What already failed here ({count} attempt{'s' if count != 1 else ''}):",
+                "title": f"What already failed here ({count} attempt{'s' if count != 1 else ''}{partly}):",
                 "details": details,
             })
 
@@ -433,6 +442,13 @@ def _analyze_files(
     return warnings
 
 
+def _hidden_lessons_hint(hidden: list[Event]) -> str:
+    issue_ids = list(dict.fromkeys(e.issue_id for e in reversed(hidden) if e.issue_id))
+    if not issue_ids:
+        return " (pjm search --failed-only)"
+    return ", from " + ", ".join(f"#{i}" for i in issue_ids) + " (get_issue(issue_id))"
+
+
 def _events_for_file(
     file_path: str,
     events: list[Event],
@@ -476,14 +492,21 @@ def _live_event_paths(
             cache[path] = project_relative(path, root, root_posix=root_posix)
         return cache[path]
 
-    out: list[tuple[Event, frozenset[str]]] = []
-    for e in events:
-        if e.id in retired:
-            continue
+    def own_paths(e: Event) -> set[str]:
         paths = {rel(f) for f in e.files}
         loc_file = location_to_file(e.location) if e.location else None
         if loc_file:
             paths.add(rel(loc_file))
+        return paths
+
+    issue_paths = {
+        e.issue_id: own_paths(e) for e in events if e.type == "issue" and e.issue_id
+    }
+    out: list[tuple[Event, frozenset[str]]] = []
+    for e in events:
+        if e.id in retired:
+            continue
+        paths = own_paths(e) or issue_paths.get(e.issue_id or "", set())
         out.append((e, frozenset(paths)))
     return out
 

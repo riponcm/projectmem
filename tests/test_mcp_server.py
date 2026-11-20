@@ -299,7 +299,7 @@ def test_server_builds_when_fastmcp_is_gone(monkeypatch, tmp_path):
     assert isinstance(module.mcp, _StubServer)
     assert module.mcp.name == "projectmem"
     # 15 memory tools + list_projects / current_project for global routing
-    assert len(module.mcp.tools) == 17
+    assert len(module.mcp.tools) == 18
     assert "list_projects" in module.mcp.tools
 
 
@@ -396,3 +396,32 @@ def test_mcp_get_issue_finds_backfilled_legacy_ids(
             _call_mcp_tool(project, tmp_path, "get_issue", {"issue_id": issue_id})
         )
         assert text == f"No issue found with ID {issue_id}.", issue_id
+
+
+def test_mcp_precheck_files_matches_single_calls(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = _make_git_project(tmp_path, monkeypatch)
+    (project / "src").mkdir()
+    for name in ("auth.py", "db.py"):
+        (project / "src" / name).write_text("x = 1\n", encoding="utf-8")
+    append_event(
+        Event(type="issue", summary="token refresh race", location="src/auth.py",
+              issue_id="0001"),
+        project,
+    )
+    append_event(
+        Event(type="attempt", summary="lock variant", outcome="failed",
+              issue_id="0001"),
+        project,
+    )
+
+    batch = _tool_text(_call_mcp_tool(
+        project, tmp_path, "precheck_files", {"file_paths": ["src/auth.py", "src/db.py"]}
+    ))
+    single = _tool_text(_call_mcp_tool(
+        project, tmp_path, "precheck_file", {"file_path": "src/auth.py"}
+    ))
+
+    assert "lock variant" in batch and "lock variant" in single
+    assert "src/db.py: no warnings" in batch

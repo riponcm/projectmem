@@ -34,6 +34,7 @@ import io
 import os
 import re
 import sys
+from collections import defaultdict
 from pathlib import Path
 from typing import Annotated, Callable, Optional
 
@@ -48,6 +49,7 @@ except ImportError:  # mcp >= 2.0
 from pydantic import Field
 
 from projectmem.commands import attempt, decision, fix, log, note
+from projectmem.models import Event
 from projectmem.storage import (
     RECORD_CHARS,
     TITLE_CHARS,
@@ -346,9 +348,11 @@ def precheck_file(
     expensive re-debugging cycles.
 
     Read-only; does not modify memory."""
-    from projectmem.commands.precheck import _analyze_files
+    return _precheck_report([file_path], _root_for(project))
+
+
+def _precheck_block(file_path: str, warnings: list[dict], root: Path) -> str:
     from projectmem.staleness import is_memory_path
-    root = _root_for(project)
     # "No warnings. Safe to modify." would contradict the instructions above:
     # memory files are written by projectmem, never edited by hand.
     if is_memory_path(file_path, root):
@@ -357,8 +361,6 @@ def precheck_file(
             "from the event log, so do not edit it; record the change with "
             "add_note / add_decision / log_issue / record_fix instead."
         )
-    events = read_events(root)
-    warnings = _analyze_files([file_path], events, root=root)
     if not warnings:
         return f"{file_path}: no warnings. Safe to modify."
     lines = [f"projectmem precheck: {file_path}"]
@@ -367,6 +369,37 @@ def precheck_file(
         for detail in w.get("details", []):
             lines.append(f"    - {detail}")
     return "\n".join(lines)
+
+
+def _precheck_report(file_paths: list[str], root: Path) -> str:
+    from projectmem.commands import precheck
+    from projectmem.staleness import project_relative
+
+    by_file: dict[str, list[dict]] = defaultdict(list)
+    for warning in precheck._analyze_files(file_paths, read_events(root), root=root):
+        by_file[warning["file"]].append(warning)
+    return "\n\n".join(
+        _precheck_block(path, by_file.get(project_relative(path.strip(), root), []), root)
+        for path in file_paths
+    )
+
+
+@mcp.tool()
+@safe_tool
+def precheck_files(
+    file_paths: Annotated[list[str], Field(
+        description="Project-relative or absolute paths of every file you "
+                    "are about to modify (e.g., ['src/auth.py', 'src/db.py'])."
+    )],
+    project: ProjectArg = None,
+) -> str:
+    """Check several files' failure history in one call, BEFORE modifying them.
+
+    Same report as precheck_file, one block per file. Prefer this when a
+    change touches more than one file.
+
+    Read-only; does not modify memory."""
+    return _precheck_report(file_paths, _root_for(project))
 
 
 @mcp.tool()
