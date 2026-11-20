@@ -7,7 +7,7 @@ from pathlib import Path
 
 from projectmem.models import Event, location_to_file, superseded_ids
 from projectmem.storage import (
-    RECORD_CHARS,
+    clip_record,
     issues_dir,
     project_map_path,
     read_events,
@@ -35,17 +35,6 @@ RECENT_FIXED_ISSUES = 10
 RECENT_DECISIONS = 15
 OPEN_IN_FULL = 20
 
-def _clip(text: str) -> str:
-    text = " ".join(text.split())
-    if len(text) <= RECORD_CHARS:
-        return text
-    head = text[: RECORD_CHARS - 3]
-    boundary = head.rfind(" ", RECORD_CHARS // 2 + 1)
-    if boundary != -1:
-        head = head[:boundary]
-    return head.rstrip(" ,;:") + "..."
-
-
 def _loc(location: str | None) -> str:
     location = " ".join((location or "").split())
     return f" [{location}]" if location else ""
@@ -63,8 +52,8 @@ def _issue_lines(
     issue_loc = _loc(issue.location)
     if fix:
         fixed_loc = issue_loc or _loc(fix.location)
-        return [f"- [DONE] #{issue_id} {_clip(issue.summary)}{fixed_loc} (fixed)"]
-    lines = [f"- [OPEN] #{issue_id} {_clip(issue.summary)}{issue_loc} (open)"]
+        return [f"- [DONE] #{issue_id} {clip_record(issue.summary)}{fixed_loc} (fixed)"]
+    lines = [f"- [OPEN] #{issue_id} {clip_record(issue.summary)}{issue_loc} (open)"]
     # Surface non-worked attempts. Both `failed` and `partial` outcomes
     # encode lessons the next session needs — dropping `partial` (L-027b)
     # would let an AI repeat work that already got 80% of the way there.
@@ -76,7 +65,7 @@ def _issue_lines(
     label = {"failed": "Failed attempt", "partial": "Partial attempt"}
     for lesson_event in lessons[-3:]:
         tag = label.get(lesson_event.outcome or "failed", "Attempt")
-        lines.append(f"  - {tag}: {_clip(lesson_event.summary)}{_loc(lesson_event.location)}")
+        lines.append(f"  - {tag}: {clip_record(lesson_event.summary)}{_loc(lesson_event.location)}")
     return lines
 
 
@@ -221,14 +210,14 @@ def build_summary(
                 "not shown (`pjm search`, or `search_events(query)` via MCP)"
             )
         for event in decisions[-RECENT_DECISIONS:]:
-            lines.append(f"- {_clip(event.summary)}{_loc(event.location)}")
+            lines.append(f"- {clip_record(event.summary)}{_loc(event.location)}")
     else:
         lines.append("- No decisions logged yet.")
 
     lines.extend(["", "## Notes"])
     if notes:
         for event in notes[-10:]:
-            lines.append(f"- {_clip(event.summary)}{_loc(event.location)}")
+            lines.append(f"- {clip_record(event.summary)}{_loc(event.location)}")
     else:
         lines.append("- No notes logged yet.")
 

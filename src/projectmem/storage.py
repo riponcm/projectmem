@@ -35,6 +35,17 @@ class ProjectMemError(RuntimeError):
     pass
 
 
+def clip_record(text: str) -> str:
+    text = " ".join(text.split())
+    if len(text) <= RECORD_CHARS:
+        return text
+    head = text[: RECORD_CHARS - 3]
+    boundary = head.rfind(" ", RECORD_CHARS // 2 + 1)
+    if boundary != -1:
+        head = head[:boundary]
+    return head.rstrip(" ,;:") + "..."
+
+
 def mem_path(root: Path | None = None) -> Path:
     return (root or Path.cwd()) / MEM_DIR
 
