@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.3.6
+
+**Your agent sees a file's lessons before it edits it, precheck shows every past failure, and parallel sessions keep to their own issues.** Every change in this release was reported, measured and contributed by [@bigfree](https://github.com/bigfree) (Adam Mikó).
+
+### Added
+
+- **An edit hook for Claude Code and Codex CLI.** Agents were asked to call `precheck_file` before editing a file. On the reporter's project they did so before 11% of 8,355 edits. `pjm-edit-hook` runs before every edit instead and gives the agent that file's open issues, failed and partial attempts, and decisions. It adds nothing for a file without lessons, shows each file once per session (again only if its lessons change), keeps subagents separate, resets after compaction, maps Claude Code worktrees back to the main checkout, and never blocks an edit. Install it once with `pjm hooks install --agent claude-code` or `--agent codex`. It takes effect in the next session, and Codex asks you to trust it first. `--project` writes the project's own config instead of your user config, and `pjm hooks uninstall --agent …` removes it. ([#37](https://github.com/riponcm/projectmem/issues/37))
+
+- **`start_session()` loads a session in one call.** It returns the rules, the memory summary and the current plan (without Ideas, Someday / maybe and Shipped), and the project map only while it is still the init placeholder. The server instructions and the `CLAUDE.md` / `AGENTS.md` bridge now name it, and independent projectmem calls may run in parallel. The older read tools are unchanged. ([#34](https://github.com/riponcm/projectmem/issues/34))
+
+- **`precheck_files(file_paths)`** checks several files in one call and one pass over the log. ([#32](https://github.com/riponcm/projectmem/issues/32))
+
+### Fixed
+
+- **Parallel sessions wrote onto each other's issues.** `record_attempt` and `record_fix` without an `issue_id` used the newest issue, so with two agents on one project one agent's fix could close the other's issue. Through MCP, while several issues are open, both now refuse and list the open issues. With one open issue nothing changes, and the CLI is unchanged. ([#33](https://github.com/riponcm/projectmem/issues/33))
+
+- **`precheck_file` missed most earlier failures.** An attempt logged without its own location now counts for its issue's file, partial attempts are lessons with their own mark, and failed or partial attempts no longer drop out after 30 days (churn and decisions keep the window). When more lessons exist than are shown, the overflow line names the issues that hold them. On the reporter's project, precheck showed the earlier failures for 72.5% of cases instead of 33.3%. ([#32](https://github.com/riponcm/projectmem/issues/32))
+
+- **The summary's Key files listed version numbers and identifiers.** Only real file paths are kept now, `file.py:42` merges into `file.py`, `.projectmem/` files are left out, and the list is ranked by how many events cite each file. A bare name without a known source suffix, such as `Makefile`, is picked up only with a directory or as an event location. ([#35](https://github.com/riponcm/projectmem/pull/35))
+
+- An event line stored without an `id` got a new random id on every read. It now gets a stable id derived from its content. ([#36](https://github.com/riponcm/projectmem/pull/36))
+
+### Changed
+
+- **Write tools no longer repeat the record back.** They reply with the issue id, or for notes and decisions the event id that `add_decision(supersedes=…)` needs. **`search_events`** uses the same matcher as `pjm search`, shows each match's type, issue, event id and date, clips the text around the match, and marks retired decisions `(superseded)`; `full=True` returns whole texts. On the reporter's two months of transcripts, write replies were 92% smaller and search results 49% smaller. ([#36](https://github.com/riponcm/projectmem/pull/36))
+
+- **Upgrading:** run `pjm init` once in each project so its `CLAUDE.md` / `AGENTS.md` bridge names `start_session()` and the `issue_id` rule. `AI_INSTRUCTIONS.md` is unchanged in this release, so a hand-edited copy is left alone.
+
 ## 0.3.5
 
 **Two community fixes: precheck recognises a file however its path is spelled, and the summary stays small even when entries are long.**

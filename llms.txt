@@ -41,7 +41,7 @@ it — as opposed to decay-based pruning or in-place fact rewriting.
   plus distilled `summary.md`, `PROJECT_MAP.md`, `plan.md`
 - **Cross-project store:** `~/.projectmem/global/` for library gotchas that carry
   between repositories
-- **MCP server:** 17 tools, verified end-to-end on Claude Desktop, Cursor,
+- **MCP server:** 19 tools, verified end-to-end on Claude Desktop, Cursor,
   Antigravity and Codex
 - **Network use:** none, apart from an update check you turn on yourself
   (`pjm doctor --online` or `--auto`). The MCP server is a stdio subprocess your
@@ -70,12 +70,13 @@ pjm brief                   # 4. one-screen status check
 - `pjm search <query>` — search across all events
 - `pjm dashboard` — cross-project view of every registered repository
 - `pjm export --claude-md` — write memory into CLAUDE.md for agents without MCP
+- `pjm hooks install --agent claude-code|codex` — show a file's lessons before every edit
 
-## MCP tools (17)
+## MCP tools (19)
 
-`get_instructions`, `get_summary`, `get_project_map`, `get_plan`, `get_context`,
-`get_issue`, `get_score`, `get_global_gotchas`, `search_events`, `precheck_file`,
-`list_projects`, `current_project`, `log_issue`, `record_attempt`, `record_fix`,
+`start_session`, `get_instructions`, `get_summary`, `get_project_map`, `get_plan`,
+`get_context`, `get_issue`, `get_score`, `get_global_gotchas`, `search_events`,
+`precheck_file`, `precheck_files`, `list_projects`, `current_project`, `log_issue`, `record_attempt`, `record_fix`,
 `add_decision`, `add_note`
 
 ## Common questions

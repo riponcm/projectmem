@@ -4,8 +4,8 @@
   <img src="https://raw.githubusercontent.com/projectmem/projectmemdoc/main/logo/projectmem-wordmark-800.png" alt="projectmem" width="420" />
 
   <p>
-    <a href="https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md"><b>🎉 v0.3.5 is out</b></a> —
-    precheck recognises a file however its path is spelled, and the summary stays small even when entries are long.
+    <a href="https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md"><b>🎉 v0.3.6 is out</b></a> —
+    lessons appear before every edit in Claude Code and Codex, precheck shows every past failure, and parallel sessions keep to their own issues.
     <a href="https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md">See what changed →</a>
   </p>
 
@@ -133,7 +133,7 @@ projectmem is an open-source **agent memory** layer built for that job. It is
 **local-first**: memory lives in a plain `.projectmem/` directory inside your
 repository, with no cloud, no account and no telemetry — the only network call
 it can make is an update check you turn on yourself. A native **MCP server**
-exposes 17 tools to Claude Code, Claude Desktop, Cursor, Antigravity and Codex,
+exposes 19 tools to Claude Code, Claude Desktop, Cursor, Antigravity and Codex,
 so your agent reads memory and logs its work on its own.
 
 Unlike chat-history memory tools, projectmem stores **typed events** — issues,
@@ -163,7 +163,7 @@ cd your-project && pjm init
 |---|---|
 | **[Complete setup guide](https://projectmem.dev/blog/projectmem-complete-guide-ai-coding-agent-memory)** | The full walkthrough on the web — install, MCP setup per client, `pjm doctor`, your first logged issue, and both dashboards. Every terminal output is captured from a real run. |
 | **[TUTORIAL.md](https://github.com/riponcm/projectmem/blob/main/TUTORIAL.md)** | 15-minute step-by-step walkthrough — set up projectmem on your own project, watch the lifecycle, see the pre-commit warning fire. |
-| **[CHANGELOG.md](https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md)** | Release history. Latest: v0.3.5 — precheck matches every spelling of a path, and long entries no longer bloat the summary. |
+| **[CHANGELOG.md](https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md)** | Release history. Latest: v0.3.6 — lessons before every edit, precheck shows every past failure, one-call session start. |
 | **[Research paper (arXiv:2606.12329)](https://arxiv.org/abs/2606.12329)** | *PROJECTMEM: A Local-First, Event-Sourced Memory and Judgment Layer for AI Coding Agents* — the peer-readable version: design, Memory-as-Governance framing, capability comparison, and the 207-event dogfooding study. |
 | **[LICENSE](https://github.com/riponcm/projectmem/blob/main/LICENSE)** | MIT |
 
@@ -199,6 +199,50 @@ That's it. `pjm init` installs three git hooks (pre-commit warnings, post-commit
 > The canonical command is `projectmem`. A `pjm` alias is installed for speed.
 
 ---
+
+## ✨ New in 0.3.6 — lessons before every edit, and a precheck that remembers
+
+**Your agent sees a file's lessons right before it edits it.** Agents were
+asked to call `precheck_file` before editing, and mostly did not. A new edit
+hook for Claude Code and Codex CLI puts the file's open issues, failed and
+partial attempts and decisions in front of the agent at the moment it edits,
+once per file per session, and adds nothing for a file with no lessons.
+Install it once for every project:
+
+```bash
+pjm hooks install --agent claude-code   # or: --agent codex
+```
+
+It takes effect in the next session. ([#37](https://github.com/riponcm/projectmem/issues/37))
+
+**Precheck shows what already failed, however long ago.** An attempt logged
+without its own location now counts for its issue's file, partial attempts
+count as lessons, and old failures no longer drop out after 30 days. On the
+reporter's real project, precheck showed the earlier failures for 72.5% of
+cases instead of 33.3%. `precheck_files` checks several files in one call.
+([#32](https://github.com/riponcm/projectmem/issues/32))
+
+**Parallel sessions keep to their own issues.** With two agents on one project,
+an attempt or fix without an `issue_id` went to the newest issue, and one agent
+could close the other's. While several issues are open, `record_attempt` and
+`record_fix` now ask for the `issue_id` and list the open ones.
+([#33](https://github.com/riponcm/projectmem/issues/33))
+
+**One call to start a session.** `start_session()` returns the rules, the
+memory summary and the current plan together.
+([#34](https://github.com/riponcm/projectmem/issues/34))
+
+**Smaller replies.** Write tools reply with the new id instead of repeating
+the text, search results are clipped around the match, and the summary's Key
+files list holds only real files, ranked by how often memory cites them.
+([#35](https://github.com/riponcm/projectmem/pull/35),
+[#36](https://github.com/riponcm/projectmem/pull/36))
+
+**Upgrading? Run `pjm init` once in each project** so its `CLAUDE.md` /
+`AGENTS.md` bridge names `start_session()`.
+
+All of 0.3.6 was reported, measured and contributed by
+[@bigfree](https://github.com/bigfree) (Adam Mikó).
 
 ## ✨ New in 0.3.5 — warnings for every spelling, and a summary that stays small
 
@@ -455,7 +499,7 @@ Your project's memory is also something you can *watch* — and share.
 | Keeps superseded memories (no deletion) | ✅ | ? | 🟡 versioned, but decay can evict | ✅ add-only since v3 | ✅ git-versioned memory |
 | Cross-project lessons | ✅ stack-scoped with a manifest | 🟡 opt-in flag | 🟡 cross-project search | 🟡 user-scoped | 🟡 per agent |
 | Runs locally with no LLM API key | ✅ | 🟡 local store, LLM compression | ✅ keyless mode | ❌ self-host needs a key | 🟡 local mode |
-| Native MCP server | ✅ 17 tools | ✅ | ✅ 54 tools | 🟡 hosted only | ❌ MCP client |
+| Native MCP server | ✅ 19 tools | ✅ | ✅ 54 tools | 🟡 hosted only | ❌ MCP client |
 | Price · licence | Free · MIT | Free · Apache-2.0, paid Pro | Free · Apache-2.0 | Free tier · Apache-2.0, paid cloud | Free tier · Apache-2.0, paid cloud |
 
 <sub>✅ yes · 🟡 partial · ❌ not found in the project's own docs · ? not documented. Snapshot taken 2026-10-02 from each project's README, docs and changelog; design capabilities, not benchmark results. Corrections welcome — [open an issue](https://github.com/riponcm/projectmem/issues).</sub>
@@ -484,7 +528,7 @@ are estimates.
 |---|---|---|
 | No projectmem (baseline) | 5,000 – 20,000+ | AI re-reads source files every session |
 | Universal Mode (markdown) | ~3,700 – 7,600 | AI reads 3 distilled files once |
-| **MCP Mode** *(recommended)* | **~3,700 – 7,600** at session start | AI calls `get_instructions()`, `get_summary()` and `get_project_map()`, then `get_issue(issue_id)` or `precheck_file(file_path)` only when relevant |
+| **MCP Mode** *(recommended)* | **~3,700 – 7,600** at session start | AI calls `start_session()` once (rules, summary and current plan), then `get_issue(issue_id)` or `precheck_file(file_path)` only when relevant |
 | `pjm wrap` (pre-injection) | 500 – 2,000 | Pre-generated, you set the budget |
 
 **AI never reads `events.jsonl` directly.** That file is for tools (`pjm score`, `pjm context`, `pjm wrap`). Tools distill the raw log into compact AI-readable summaries.
@@ -581,8 +625,7 @@ With one project registered, that is the whole setup — there is only one place
 
 ```text
 Hi — I use projectmem as this project's memory. Before anything else,
-call get_instructions(), then get_summary(), then get_project_map() to
-load what we already know. As we work, log issues, attempts
+call start_session() to load what we already know. As we work, log issues, attempts
 (failed/worked), fixes, decisions, and notes with the projectmem tools,
 and call precheck_file(file_path) before you edit a file. Ideas and plans go
 in plan.md via get_plan() — never as events.
@@ -744,18 +787,20 @@ root or rely on the parent-walk auto-discovery.
 
 ### MCP Tools Exposed
 
-All 17 tools your AI can call. Every repo tool takes an optional
+All 19 tools your AI can call. Every repo tool takes an optional
 `project` argument — see [One server, many projects](#one-server-many-projects):
 
-**Read-side (12 tools):**
+**Read-side (14 tools):**
 
 | Tool | When to use |
 |---|---|
-| `get_instructions()` | Start of every session — load workflow rules |
+| `start_session()` | Start of every session — rules, summary and current plan in one call |
+| `get_instructions()` | Load the workflow rules on their own |
 | `get_summary()` | Start and end — distilled project memory |
 | `get_project_map()` | Start — understand repo structure |
 | `get_plan()` | Read `plan.md` — the ideas + plans (intent), separate from the event log |
 | `precheck_file(file_path)` | Before editing any file — surface failure history |
+| `precheck_files(file_paths)` | The same for several files in one call |
 | `get_issue(issue_id)` | Read one specific issue's full history by ID |
 | `search_events(query)` | Plain-text search across all logged events |
 | `get_context(tokens, focus)` | Token-budgeted memory block with optional focus filter |
@@ -769,8 +814,8 @@ All 17 tools your AI can call. Every repo tool takes an optional
 | Tool | When to use |
 |---|---|
 | `log_issue(summary, location)` | Immediately when encountering a bug |
-| `record_attempt(summary, outcome)` | Immediately after each fix attempt (outcome: `failed`/`partial`/`worked`) |
-| `record_fix(summary)` | After confirming a fix resolves the issue |
+| `record_attempt(summary, outcome, issue_id)` | Immediately after each fix attempt (outcome: `failed`/`partial`/`worked`); `issue_id` is required while several issues are open |
+| `record_fix(summary, issue_id)` | After confirming a fix resolves the issue |
 | `add_decision(summary, supersedes?)` | When making architectural / design decisions; pass `supersedes` to retire a stale decision without losing history |
 | `add_note(summary)` | When discovering gotchas, setup details, or constraints |
 
@@ -826,6 +871,7 @@ All 17 tools your AI can call. Every repo tool takes an optional
 | `pjm stats` | Token ROI summary in the terminal |
 | `pjm backfill` | Auto-populate memory from git history |
 | `pjm hooks install\|uninstall` | Manage git hooks manually |
+| `pjm hooks install --agent claude-code\|codex` | Show a file's lessons before every edit in Claude Code or Codex (`--project` for this project only) |
 | `pjm regenerate` | Rebuild `summary.md` from `events.jsonl` |
 
 > Use `--at "file.py:42"` with any logging command to attach precise location metadata.
