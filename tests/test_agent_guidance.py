@@ -266,25 +266,11 @@ def test_every_write_tool_states_its_record_length():
 
 
 def test_the_three_surfaces_agree_about_the_session_start_order():
-    """There is a standing warning about these drifting apart.
-
-    A past divergence had CLAUDE.md saying "call get_summary first" while the
-    MCP field said get_instructions — clients that read both got contradictory
-    orders.
-    """
-    import re
-
-    # AI_INSTRUCTIONS.md is deliberately not in this list: it *is* the content
-    # of step 1, so it does not tell you to call step 1 again. Only the two
-    # surfaces that advertise the trio can disagree about its order.
     for name, text in (("bridge", _claude_md_bridge("demo")),
                        ("instructions=", _mcp_instructions())):
-        # Anchor on the numbered session-start list, not on the first mention
-        # anywhere: the prose also cites get_summary when explaining token cost,
-        # which says nothing about ordering.
-        ordered = re.findall(r"\d\.\s+`?(get_\w+)", text)
-        assert ordered[:2] == ["get_instructions", "get_summary"], (
-            f"{name} lists the session-start trio as {ordered[:3]}"
+        assert "start_session()" in text, f"{name} does not name start_session()"
+        assert "1. `get_instructions" not in text and "1. get_instructions" not in text, (
+            f"{name} still lists the old session-start trio"
         )
 
 

@@ -73,7 +73,7 @@ def _fix_for(issue_events: list[Event]) -> Event | None:
     return next((event for event in reversed(issue_events) if event.type == "fix"), None)
 
 
-def _looks_like_placeholder(text: str) -> bool:
+def looks_like_placeholder(text: str) -> bool:
     """True if `text` is empty or contains a known placeholder phrase."""
     if not text:
         return True
@@ -123,7 +123,7 @@ def extract_project_purpose_from_map(map_path: Path) -> str | None:
     if not match:
         return None
     body = match.group("body").strip()
-    if _looks_like_placeholder(body):
+    if looks_like_placeholder(body):
         return None
     return body
 
@@ -253,7 +253,7 @@ def extract_project_purpose(summary: str) -> str | None:
     if not match:
         return None
     body = match.group("body").strip()
-    if _looks_like_placeholder(body):
+    if looks_like_placeholder(body):
         return None
     return body
 

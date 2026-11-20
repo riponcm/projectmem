@@ -128,7 +128,7 @@ def _claude_md_bridge(project_name: str | None = None) -> str:
     """The bridge block written into CLAUDE.md.
 
     Mirrors the MCP server's `instructions=` field (`mcp_server.py`):
-    same session-start trio, same write-side rule. Keep the two in sync
+    same session start, same write-side rule. Keep the two in sync
     — divergence between them was the L-031 finding: CLAUDE.md said
     "call get_summary first" while the MCP field said "call
     get_instructions first," confusing AI clients that read both.
@@ -153,16 +153,12 @@ def _claude_md_bridge(project_name: str | None = None) -> str:
         "## projectmem (MANDATORY)\n\n"
         "This project uses projectmem for persistent memory + workflow rules.\n\n"
         f"{named}"
-        "SESSION START — call these three MCP tools, in this order, BEFORE\n"
-        "answering ANY question about this project:\n\n"
-        "  1. `get_instructions()` — loads the project's mandatory workflow\n"
-        "     rules. Without this you will not know how to log work\n"
-        "     correctly, when to use `add_note` vs `add_decision`, or how\n"
-        "     the event log is structured.\n"
-        "  2. `get_summary()` — loads project content. Do NOT answer from\n"
-        "     conversation history or by re-reading package.json / README /\n"
-        "     source files.\n"
-        "  3. `get_project_map()` — loads structural layout when relevant.\n\n"
+        "SESSION START — call `start_session()` once, BEFORE answering ANY\n"
+        "question about this project. It returns the project's mandatory\n"
+        "workflow rules, the memory summary and the current plan in one\n"
+        "response. Do NOT answer from conversation history or by re-reading\n"
+        "package.json / README / source files. Call `get_project_map()` only\n"
+        "when the file layout matters.\n\n"
         "BEFORE modifying ANY file:\n"
         "  - Call `precheck_file(file_path)` — check failure history first.\n\n"
         "DURING work — use MCP write tools, NEVER edit `.projectmem/`\n"

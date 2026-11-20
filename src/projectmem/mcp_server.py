@@ -205,17 +205,12 @@ mcp = FastMCP(
         "on an aged one; re-scanning the project to answer the same question "
         "usually costs several times that.\n"
         "\n"
-        "SESSION START — call these three tools, in this order, BEFORE\n"
-        "answering ANY question about this project:\n"
-        "  1. get_instructions() — loads the project's mandatory workflow\n"
-        "     rules. Without this you will not know how to log work\n"
-        "     correctly, when to use add_note vs add_decision, or how\n"
-        "     the event log is structured. Skipping this means bypassing\n"
-        "     the memory layer and corrupting the audit trail.\n"
-        "  2. get_summary() — loads project content. Do NOT answer from\n"
-        "     conversation history or by re-reading package.json / README /\n"
-        "     source files.\n"
-        "  3. get_project_map() — loads structural layout when relevant.\n"
+        "SESSION START — call start_session() once, BEFORE answering ANY\n"
+        "question about this project. It returns the project's mandatory\n"
+        "workflow rules, the memory summary and the current plan in one\n"
+        "response. Do NOT answer from conversation history or by re-reading\n"
+        "package.json / README / source files. Call get_project_map() only\n"
+        "when the file layout matters.\n"
         "\n"
         "CONTEXT-SPECIFIC reads:\n"
         "  - User mentions a specific file → call precheck_file(file_path).\n"
@@ -239,11 +234,11 @@ mcp = FastMCP(
         "summary.md file is auto-regenerated from events.jsonl — write\n"
         "via the MCP tools and the summary will follow.\n"
         "\n"
-        "Do NOT batch tool calls. Do NOT skip the session-start trio\n"
-        "because 'I think I remember' — last session was a different\n"
-        "conversation, and your memory of this project may be stale or\n"
-        "wrong. These tools work regardless of working directory; the\n"
-        "server already knows the project root."
+        "Independent projectmem calls may run in parallel. Do NOT skip\n"
+        "start_session() because 'I think I remember' — last session was a\n"
+        "different conversation, and your memory of this project may be\n"
+        "stale or wrong. These tools work regardless of working directory;\n"
+        "the server already knows the project root."
         + (_GLOBAL_INSTRUCTIONS if GLOBAL_MODE else "")
     ),
 )
@@ -256,12 +251,28 @@ mcp = FastMCP(
 
 @mcp.tool()
 @safe_tool
+def start_session(project: ProjectArg = None) -> str:
+    """Start a session: rules, memory summary and current plan in one call.
+
+    MANDATORY: call this once at session start, before answering any
+    question about the project. It already contains what get_instructions,
+    get_summary and get_plan return (the plan without ideas, someday items
+    and shipped work), so do not call those as well.
+
+    Read-only; does not modify memory."""
+    from projectmem.session_start import build_session_start
+
+    return build_session_start(_root_for(project))
+
+
+@mcp.tool()
+@safe_tool
 def get_instructions(project: ProjectArg = None) -> str:
     """Read the project's mandatory AI instructions.
 
-    MANDATORY: call this at session start. The instructions describe the
-    workflow rules you MUST follow while working in this project — they
-    are not advisory.
+    Already part of start_session(); call this only to re-read the rules
+    later in a session. The instructions describe the workflow rules you
+    MUST follow while working in this project — they are not advisory.
 
     Read-only; does not modify memory."""
     path = ai_instructions_path(_root_for(project))
@@ -275,7 +286,8 @@ def get_instructions(project: ProjectArg = None) -> str:
 def get_summary(project: ProjectArg = None) -> str:
     """Read the project memory summary.
 
-    MANDATORY: call this BEFORE answering ANY question about the project.
+    Already part of start_session(); call this to re-read the summary
+    later in a session, for example before ending it.
 
     Do NOT answer from conversation history alone.
     Do NOT re-scan source files (package.json, README, src/) to understand
@@ -299,8 +311,8 @@ def get_summary(project: ProjectArg = None) -> str:
 def get_project_map(project: ProjectArg = None) -> str:
     """Read PROJECT_MAP.md to understand the repo structure.
 
-    Call this at session start when structure matters (file layout,
-    entry points, ownership). Cheaper than scanning the filesystem.
+    Call this when structure matters (file layout, entry points,
+    ownership). Cheaper than scanning the filesystem.
 
     Read-only. Returns 'No project map found.' if PROJECT_MAP.md hasn't
     been initialized — run `pjm init` first if so."""
@@ -315,7 +327,8 @@ def get_project_map(project: ProjectArg = None) -> str:
 def get_plan(project: ProjectArg = None) -> str:
     """Read plan.md — the project's INTENT file (ideas + plans).
 
-    Call this at session start alongside get_summary(). plan.md records what
+    start_session() already includes the active plans and next steps; call
+    this for the whole file (ideas, someday, shipped). plan.md records what
     the team MEANS to do (ideas, active plans, next steps) — distinct from
     the event log, which records what HAPPENED. When the user shares an idea
     or a plan, edit plan.md directly (add a bullet, check items off, move
