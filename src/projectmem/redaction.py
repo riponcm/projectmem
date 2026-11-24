@@ -53,8 +53,17 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     # Bearer tokens after the literal "Bearer" / "bearer" keyword.
     ("bearer_token",   re.compile(r"(?<![A-Za-z])[Bb]earer\s+[A-Za-z0-9._~+/=\-]{20,}")),
 
-    # PEM private-key block headers.
-    ("private_key",    re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
+    # PEM / PGP private-key blocks, from BEGIN to END. If the block is cut off,
+    # the armor headers and base64 lines that follow BEGIN. Lines may carry a
+    # diff or quote prefix.
+    ("private_key",    re.compile(
+        r"-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----"
+        r"(?:(?:(?!-----(?:BEGIN|END) )[\s\S])*"
+        r"-----END [A-Z ]*PRIVATE KEY(?: BLOCK)?-----"
+        r"|(?:(?:\s|\\[rn])+(?:[-+>|#][ \t]*)?"
+        r"(?:(?:Proc-Type|DEK-Info|Version|Comment): [^\r\n\\]*"
+        r"|[A-Za-z0-9+/=]{20,}))*)"
+    )),
 ]
 
 

@@ -131,6 +131,82 @@ def test_redacts_known_secret_shapes(input_text_fn, kind: str) -> None:
         assert _PRE_AWS + "A" * 10 not in out
 
 
+# ── private keys: the whole block, not just the header ──────────────────
+
+
+def _private_key_body() -> str:
+    # Made-up base64 lines, with "+", "/" and "=" like a real key body.
+    return "\n".join(["MII" + "a1B+" * 15, "c2/D" * 16, "e3F=="])
+
+
+def _private_key_block(kind: str = "", suffix: str = "") -> str:
+    label = kind + "PRIVATE " + "KEY" + suffix
+    return (
+        "-----BEGIN " + label + "-----\n"
+        + _private_key_body()
+        + "\n-----END " + label + "-----"
+    )
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\\n"])
+@pytest.mark.parametrize("kind", ["", "RSA ", "EC ", "OPENSSH ", "ENCRYPTED "])
+def test_redacts_whole_private_key(kind: str, newline: str) -> None:
+    key = _private_key_block(kind).replace("\n", newline)
+    out, fired = redact("deploy fails with " + key + " in the env")
+    assert out == "deploy fails with [REDACTED:private_key] in the env"
+    assert fired == ["private_key"]
+
+
+def test_redacts_whole_pgp_private_key() -> None:
+    out, _ = redact(_private_key_block("PGP ", " BLOCK"))
+    assert out == "[REDACTED:private_key]"
+
+
+def test_redacts_private_key_with_pem_headers() -> None:
+    key = _private_key_block("RSA ").replace(
+        "-----\n", "-----\nProc-Type: 4,ENCRYPTED\nDEK-Info: AES-128-CBC,0A1B\n\n", 1
+    )
+    out, _ = redact(key)
+    assert out == "[REDACTED:private_key]"
+
+
+def test_redacts_private_key_that_is_cut_off() -> None:
+    block = _private_key_block()
+    out, _ = redact(block[: block.index("\ne3F==")])
+    assert out == "[REDACTED:private_key]"
+
+
+@pytest.mark.parametrize("prefix", ["-", "+", "> ", "# "])
+def test_redacts_private_key_in_a_diff_or_quote(prefix: str) -> None:
+    lines = _private_key_block("RSA ").split("\n")
+    whole, _ = redact("\n".join(prefix + line for line in lines) + "\nok")
+    assert whole == prefix + "[REDACTED:private_key]\nok"
+    cut, _ = redact("\n".join(prefix + line for line in lines[:-2]))
+    assert cut == prefix + "[REDACTED:private_key]"
+
+
+@pytest.mark.parametrize(
+    "headers",
+    ["Proc-Type: 4,ENCRYPTED\nDEK-Info: AES-128-CBC,0A1B\n", "Version: GnuPG v2\n"],
+)
+def test_redacts_cut_off_private_key_with_armor_headers(headers: str) -> None:
+    block = _private_key_block().replace("-----\n", "-----\n" + headers + "\n", 1)
+    out, _ = redact(block[: block.index("\ne3F==")])
+    assert out == "[REDACTED:private_key]"
+
+
+def test_keeps_text_between_two_private_keys() -> None:
+    key = _private_key_block()
+    out, fired = redact("old: " + key + " new: " + key)
+    assert out == "old: [REDACTED:private_key] new: [REDACTED:private_key]"
+    assert fired == ["private_key", "private_key"]
+
+
+def test_keeps_text_after_a_private_key_header() -> None:
+    out, _ = redact("parser rejects " + _private_key_header() + " without a newline")
+    assert out == "parser rejects [REDACTED:private_key] without a newline"
+
+
 # ── false-positive guards ──────────────────────────────────────────────
 
 
