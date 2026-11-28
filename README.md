@@ -62,6 +62,14 @@ https://github.com/user-attachments/assets/e055988e-7253-4ba9-92fc-95d3d4bcd763
 
 </div>
 
+<p align="center">
+  <a href="https://youtu.be/pELGdXHj_Ls">
+    <img src="https://img.youtube.com/vi/pELGdXHj_Ls/maxresdefault.jpg" alt="projectmem tutorial on YouTube: install, connect your AI client and your first session" width="720" />
+  </a>
+  <br />
+  <em>The full screen-recorded tutorial: <a href="https://youtu.be/pELGdXHj_Ls">watch on YouTube</a></em>
+</p>
+
 ## Why AI coding agents need memory
 
 Every new session starts from zero. The agent forgets yesterday's decisions,
@@ -181,7 +189,9 @@ which is updated.
   decisions, lessons and past failures over. See
   [Import from another memory tool](#import-from-another-memory-tool).
 - **Want every step with real output?** Follow
-  [the complete setup guide](https://projectmem.dev/blog/projectmem-complete-guide-ai-coding-agent-memory).
+  [the complete setup guide](https://projectmem.dev/blog/projectmem-complete-guide-ai-coding-agent-memory),
+  or the 15-minute [TUTORIAL.md](https://github.com/riponcm/projectmem/blob/main/TUTORIAL.md) on your own
+  project.
 
 ## What your agent sees
 
@@ -611,7 +621,8 @@ file.
   raw log is gitignored; add `.projectmem/` to `.gitignore` to keep everything on
   your machine.
 
-Full policy and threat model: [SECURITY.md](https://github.com/riponcm/projectmem/blob/main/SECURITY.md).
+Full policy and threat model: [SECURITY.md](https://github.com/riponcm/projectmem/blob/main/SECURITY.md) ·
+[Privacy and security guide](https://projectmem.dev/guide#privacy-security).
 
 ## Research and citation
 
@@ -642,7 +653,17 @@ a two-month, 207-event dogfooding study across 10 real projects.
 ## Contributing
 
 projectmem was started by one developer and is shaped by contributors from the
-open-source community.
+open-source community. Thank you to everyone whose reports, measurements and code
+are in it:
+[Mike Hanley](https://github.com/hanley-development),
+[Vivaan Dhawan](https://github.com/VIVAAN-DHAWAN),
+[medium-effort](https://github.com/medium-effort),
+[Rohan Tiwari](https://github.com/RTE404),
+[hylin](https://github.com/linhongyu510),
+[Vishal Habib](https://github.com/vishalhabib99),
+[Adam Mikó](https://github.com/bigfree),
+[bardrop](https://github.com/bardrop) and
+[Fonsi](https://github.com/Fonsi44).
 
 - **[Star the repo](https://github.com/riponcm/projectmem)**: one click, and it
   helps others find it.
@@ -658,4 +679,4 @@ Built with [Typer](https://github.com/tiangolo/typer), the
 
 ## License
 
-MIT: free for personal, commercial and enterprise use.
+[MIT](https://github.com/riponcm/projectmem/blob/main/LICENSE): free for personal, commercial and enterprise use.
