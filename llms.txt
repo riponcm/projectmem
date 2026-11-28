@@ -124,6 +124,7 @@ agent, and git hooks capture events with no AI involvement at all.
 - Website: https://projectmem.dev
 - Guide: https://projectmem.dev/guide
 - FAQ: https://projectmem.dev/faq
+- Tutorial, one-command setup and importing from mem0 or agentmemory (v0.3.7): https://projectmem.dev/blog/projectmem-v037-one-command-setup-import-mem0-agentmemory/
 - Full markdown corpus for crawlers: https://projectmem.dev/llms-full.txt
 - Source: https://github.com/riponcm/projectmem
 - Package: https://pypi.org/project/projectmem/
