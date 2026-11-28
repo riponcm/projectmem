@@ -4,8 +4,8 @@
   <img src="https://raw.githubusercontent.com/projectmem/projectmemdoc/main/logo/projectmem-wordmark-800.png" alt="projectmem" width="420" />
 
   <p>
-    <a href="https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md"><b>🎉 v0.3.6 is out</b></a> —
-    lessons appear before every edit in Claude Code and Codex, precheck shows every past failure, and parallel sessions keep to their own issues.
+    <a href="https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md"><b>🎉 v0.3.7 is out</b></a> —
+    one command connects Claude Code, Codex, Cursor, Antigravity or Claude Desktop, and private keys are now redacted whole.
     <a href="https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md">See what changed →</a>
   </p>
 
@@ -80,7 +80,24 @@ https://github.com/user-attachments/assets/e055988e-7253-4ba9-92fc-95d3d4bcd763
 > pjm doctor --fix
 > ```
 >
-> **4. Point your AI at all of them with one config**
+> **4. Connect your AI client: one command, once**
+>
+> In any project, run `pjm init` with the client you use:
+>
+> ```bash
+> pjm init --agent claude-code   # or: codex, cursor, antigravity, claude-desktop
+> ```
+>
+> It adds the projectmem MCP server to that client's user config, once for
+> every project. For Claude Code and Codex it also installs the edit hook, so
+> your agent sees a file's open issues, failed attempts and decisions before it
+> edits that file. Your other MCP servers and settings stay as they are, and a
+> config it cannot read is left untouched. Repeat `--agent` for several
+> clients. **Then start a new session, or fully restart a desktop app**: MCP
+> servers only load on start.
+>
+> Prefer to paste it by hand, or use another client? `pjm init` without
+> `--agent` prints this block with your own Python path filled in:
 >
 > ```json
 > "mcpServers": {
@@ -92,10 +109,7 @@ https://github.com/user-attachments/assets/e055988e-7253-4ba9-92fc-95d3d4bcd763
 > ```
 >
 > No `--root`, no `cwd` — that's what makes it serve everything. Per-client
-> instructions (Claude Desktop, Claude Code, Cursor, Antigravity, Codex) are in
-> [MCP Integration](#mcp-integration-recommended); `pjm init` prints this block
-> with your own Python path filled in. **Then fully restart the client** — MCP
-> servers only load on a cold start.
+> instructions are in [MCP Integration](#mcp-integration-recommended).
 >
 > **5. Check your work**
 >
@@ -120,15 +134,14 @@ https://github.com/user-attachments/assets/e055988e-7253-4ba9-92fc-95d3d4bcd763
 > and writes down what it finds. Fewer tokens, no repeated dead ends, memory that
 > outlives the session.
 >
-> **6. Using Claude Code or Codex? Show lessons before every edit** *(optional, once)*
+> **Rather let your AI do it?** Paste this into Claude Code, Codex or Cursor:
 >
-> ```bash
-> pjm hooks install --agent claude-code   # or: --agent codex
+> ```text
+> Set up projectmem for this project: install it with `pipx install projectmem`
+> (or `pip install projectmem`), then run `pjm init --agent <client>` here with
+> the client you are running in: claude-code, codex, cursor, antigravity or
+> claude-desktop. Show me the output, then tell me to start a new session.
 > ```
->
-> Before your agent edits a file, it sees that file's open issues, failed
-> attempts and decisions — without having to remember to ask. Files with no
-> lessons add nothing. It starts working in your next session.
 
 ---
 
@@ -173,7 +186,7 @@ cd your-project && pjm init
 |---|---|
 | **[Complete setup guide](https://projectmem.dev/blog/projectmem-complete-guide-ai-coding-agent-memory)** | The full walkthrough on the web — install, MCP setup per client, `pjm doctor`, your first logged issue, and both dashboards. Every terminal output is captured from a real run. |
 | **[TUTORIAL.md](https://github.com/riponcm/projectmem/blob/main/TUTORIAL.md)** | 15-minute step-by-step walkthrough — set up projectmem on your own project, watch the lifecycle, see the pre-commit warning fire. |
-| **[CHANGELOG.md](https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md)** | Release history. Latest: v0.3.6 — lessons before every edit, precheck shows every past failure, one-call session start. |
+| **[CHANGELOG.md](https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md)** | Release history. Latest: v0.3.7 — one command connects your AI client, private keys redacted whole, backfill fix. |
 | **[Research paper (arXiv:2606.12329)](https://arxiv.org/abs/2606.12329)** | *PROJECTMEM: A Local-First, Event-Sourced Memory and Judgment Layer for AI Coding Agents* — the peer-readable version: design, Memory-as-Governance framing, capability comparison, and the 207-event dogfooding study. |
 | **[LICENSE](https://github.com/riponcm/projectmem/blob/main/LICENSE)** | MIT |
 
@@ -207,6 +220,36 @@ pjm init
 That's it. `pjm init` installs three git hooks (pre-commit warnings, post-commit classification, post-merge tracking), auto-starts a real-time file watcher, inherits cross-project memory if available, and creates `.projectmem/`. Capture is active from minute one.
 
 > The canonical command is `projectmem`. A `pjm` alias is installed for speed.
+
+---
+
+## ✨ New in 0.3.7 — one command connects your AI client
+
+**No more pasting config.** Connecting a client to projectmem used to mean
+finding its config file and pasting a block into it. Now one command does it:
+
+```bash
+pjm init --agent claude-code   # or: codex, cursor, antigravity, claude-desktop
+```
+
+It adds the MCP server to that client's user config, once for every project,
+and for Claude Code and Codex it also installs the edit hook from 0.3.6.
+Claude Code and Codex are set up through their own `claude mcp add` and
+`codex mcp add`. For Cursor, Antigravity and Claude Desktop, only the
+`projectmem` entry is added: your other servers and settings stay as they
+were, and the previous file is kept as a backup. A config it cannot read is
+left untouched, and running it twice changes nothing. Your AI can run it for
+you, too: see [Start here](#-start-here--five-minutes-once).
+
+**Private keys are redacted whole.** Only the `BEGIN … PRIVATE KEY` line used
+to be replaced, so the key itself reached `events.jsonl`. Now the whole block
+is redacted. Contributed by [@bardrop](https://github.com/bardrop).
+([#38](https://github.com/riponcm/projectmem/pull/38))
+
+**Backfill handles a `|` in a commit message.** It used to stop at such a
+commit, and `pjm init` then imported no history at all. Reported by
+[@Fonsi44](https://github.com/Fonsi44).
+([#39](https://github.com/riponcm/projectmem/issues/39))
 
 ---
 
@@ -629,8 +672,8 @@ With one project registered, that is the whole setup — there is only one place
 
 ### The 3-minute workflow (let your AI do the setup)
 
-1. **Install + init.** `pip install projectmem`, then `cd` into your project and run `pjm init` — or simply ask your AI to run it.
-2. **Ask your AI to set up the projectmem MCP server for you** — it can edit the client's config file itself. (It needs permission to do that: use Auto / accept-edits mode, or approve the file edit when asked. The exact config per client is in the sections below if you'd rather paste it by hand.)
+1. **Install.** `pipx install projectmem` (or `pip install projectmem`).
+2. **Connect your client.** `cd` into your project and run `pjm init --agent claude-code` (or `codex`, `cursor`, `antigravity`, `claude-desktop`), or ask your AI to run it with the client it is running in. It adds the MCP server to the client's config once, for every project, without touching your other servers. The exact config per client is in the sections below if you'd rather paste it by hand.
 3. **Restart the AI tool** so the MCP server loads, then start your session with this prompt:
 
 ```text
@@ -836,6 +879,7 @@ All 19 tools your AI can call. Every repo tool takes an optional
 | Command | Purpose |
 |---|---|
 | `pjm init` | Initialize memory + auto-install hooks + inherit global memory |
+| `pjm init --agent <client>` | Also connect an AI client: `claude-code`, `codex`, `cursor`, `antigravity` or `claude-desktop` (repeatable). Adds the MCP server once for every project and, for Claude Code and Codex, the edit hook *(new in 0.3.7)* |
 | `pjm log <text>` | Start a new issue / debugging session |
 | `pjm attempt <text> [--failed\|--worked]` | Record a fix attempt outcome |
 | `pjm fix <text> [--issue <id>]` | Record the confirmed fix and close the issue — `--issue` targets a specific one *(new in 0.1.5)* |

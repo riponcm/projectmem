@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.7
+
+**One command connects your AI client, private keys are redacted whole, and backfill no longer trips over a `|` in a commit message.**
+
+### Added
+
+- **`pjm init --agent <client>` connects an AI client for you.** Setting up the MCP server used to mean copying the block `pjm init` prints into the right file for each client. With `--agent claude-code`, `codex`, `cursor`, `antigravity` or `claude-desktop` (repeat it for several), `pjm init` adds the server to that client's user config once, for every project, and for Claude Code and Codex also installs the edit hook from 0.3.6. Claude Code and Codex are set up through their own `claude mcp add` and `codex mcp add`. For Cursor, Antigravity and Claude Desktop, only the `projectmem` entry is added to their JSON file: other servers and settings stay as they were, the previous file is kept as `<name>.pjm-bak`, and the file's permissions and dotfile symlinks are kept. A config that does not parse is left untouched and the entry to paste is printed. An entry pinned to one repo, or a projectmem server saved under another name, is left as it is. Running it again changes nothing. Without `--agent`, `pjm init` prints the config as before.
+
+### Fixed
+
+- **Private keys were only partly redacted.** Only the `-----BEGIN … PRIVATE KEY-----` line was replaced, so the key itself was written to `events.jsonl`, for example from a pasted service-account JSON. The whole block up to its `END` line is redacted now: PKCS#8, RSA, EC, OpenSSH, encrypted and PGP keys, with real or escaped line breaks, also inside a diff or a quote. A key cut off before its `END` line has its base64 lines redacted. Public keys and certificates are not touched. Contributed by [@bardrop](https://github.com/bardrop). ([#38](https://github.com/riponcm/projectmem/pull/38))
+
+- **`pjm backfill` stopped at a commit with `|` in its subject or author name**, with `ValueError: too many values to unpack`. Because `pjm init` hides backfill errors, one such commit among the last 20 meant `pjm init` imported no history at all. The `git log` fields are now separated by a character a commit message cannot contain, and a line that still does not parse is skipped instead of stopping the import. Reported by [@Fonsi44](https://github.com/Fonsi44). ([#39](https://github.com/riponcm/projectmem/issues/39))
+
 ## 0.3.6
 
 **Your agent sees a file's lessons before it edits it, precheck shows every past failure, and parallel sessions keep to their own issues.** Every change in this release was reported, measured and contributed by [@bigfree](https://github.com/bigfree) (Adam Mikó).

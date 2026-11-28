@@ -52,17 +52,24 @@ it — as opposed to decay-based pruning or in-place fact rewriting.
 ## Getting started
 
 ```bash
-pip install projectmem      # 1. install (Python 3.10+)
+pip install projectmem      # 1. install (Python 3.10+; pipx works too)
 cd your-project
-pjm init                    # 2. creates .projectmem/, git hooks, and prints
-                            #    an MCP config with absolute paths filled in
-# 3. paste that config into your AI client, then fully quit and reopen it
+pjm init --agent claude-code   # 2. creates .projectmem/ and git hooks, and connects
+                               #    the client: claude-code, codex, cursor,
+                               #    antigravity or claude-desktop
+# 3. start a new session (or fully quit and reopen a desktop app)
 pjm brief                   # 4. one-screen status check
 ```
+
+An AI agent asked to set up projectmem should run step 2 with the client it is
+running in. It adds the MCP server to that client's user config once, for every
+project, keeps the other servers, and installs the edit hook for Claude Code and
+Codex. Without `--agent`, `pjm init` prints the config to paste by hand.
 
 ## Key commands
 
 - `pjm init` — initialise memory in the current repository
+- `pjm init --agent <client>` — also connect an AI client (MCP server, plus the edit hook for Claude Code and Codex)
 - `pjm brief` — session-start briefing: warnings, stale memories, open issues, score
 - `pjm show` — print the distilled summary
 - `pjm precheck` — check staged files against failure history (runs from the git hook)
