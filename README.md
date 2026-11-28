@@ -1,16 +1,11 @@
 <!-- mcp-name: io.github.riponcm/projectmem -->
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/projectmem/projectmemdoc/main/logo/projectmem-wordmark-800.png" alt="projectmem" width="420" />
+  <img src="https://raw.githubusercontent.com/projectmem/projectmemdoc/main/logo/projectmem-wordmark-800.png" alt="projectmem — memory for AI coding agents" width="420" />
 
-  <p>
-    <a href="https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md"><b>🎉 v0.3.7 is out</b></a> —
-    one command connects Claude Code, Codex, Cursor, Antigravity or Claude Desktop, your history from agentmemory or mem0 comes with you, and private keys are now redacted whole.
-    <a href="https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md">See what changed →</a>
-  </p>
+  <h1>projectmem: memory for AI coding agents</h1>
 
   <p><b>We don't make AI smarter. We make it experienced.</b></p>
-  <p><i><b>Coding agent memory</b> — the local-first memory + judgment layer for AI coding agents. One MCP server for every project. Stop re-reading your project every session. Stop repeating yesterday's bug.</i></p>
 
   <p>
     <a href="https://pypi.org/project/projectmem/"><img src="https://img.shields.io/pypi/v/projectmem.svg?color=4c1d95&label=pypi" alt="PyPI version"></a>
@@ -29,935 +24,186 @@
     <a href="https://projectmem.dev"><b>Website</b></a> •
     <a href="https://projectmem.dev/guide"><b>Guide</b></a> •
     <a href="https://projectmem.dev/demo"><b>Demo</b></a> •
-    <a href="https://projectmem.dev/changelog"><b>Changelog</b></a> •
+    <a href="https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md"><b>Changelog</b></a> •
     <a href="https://arxiv.org/abs/2606.12329"><b>Paper</b></a>
   </p>
 
-  <br />
+  <p>
+    <a href="https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md"><b>🎉 v0.3.7 is out</b></a> —
+    one command connects your AI client, and <code>pjm import</code> brings your history over from agentmemory or mem0.
+  </p>
+</div>
+
+## What is projectmem?
+
+**projectmem is a local-first memory and judgment layer for AI coding agents.**
+It records a project's issues, fix attempts (failed, partial and worked), fixes
+and decisions as plain files inside the repository. At the start of each session
+it gives Claude Code, Codex, Cursor, Antigravity or Claude Desktop a short summary
+of what the project already learned. Before the agent edits or commits a file, it
+warns when an approach on that file has already failed.
+
+- **For:** developers who work with AI coding agents and are tired of re-explaining
+  the project, and of watching the agent retry a fix that failed last week.
+- **Local-first:** memory lives in `.projectmem/` in your repo. No cloud, no
+  account, no API key, no telemetry.
+- **One MCP server for every project:** 19 tools, set up once per client with
+  `pjm init --agent <client>`.
+- **Typed events, not chat logs:** issue, hypothesis, attempt, fix, decision and
+  note. That structure is what makes the warnings possible.
+- **Small at session start:** about 3,700 to 7,600 tokens, measured on nine real
+  projects.
+- **Open source:** MIT licence, Python 3.10+, macOS, Linux and Windows. Described
+  in the paper [arXiv:2606.12329](https://arxiv.org/abs/2606.12329).
+
+<div align="center">
 
 https://github.com/user-attachments/assets/e055988e-7253-4ba9-92fc-95d3d4bcd763
 
-  <br /><br />
-
-  <img src="https://raw.githubusercontent.com/projectmem/projectmemdoc/main/screenshots/dashboard-overview-0.3.0.png" alt="projectmem dashboard — coding agent memory for one project: memory card, failure heatmap, ROI and case files" width="860" />
-  <p><sub><code>pjm visualize</code> — every case your project solved, what failed on the way, and what it saved. Generated locally from <code>.projectmem/events.jsonl</code>.</sub></p>
 </div>
 
----
+## Why AI coding agents need memory
 
-> ## 🚀 Start here — five minutes, once
->
-> *Five minutes if you follow along here. Want to be shown instead — every
-> command, the exact output it prints back, and the dashboards at the end?
-> Take **[the complete setup guide](https://projectmem.dev/blog/projectmem-complete-guide-ai-coding-agent-memory)**.*
->
-> **New to projectmem, or upgrading from 0.1.x / 0.2.x?** Since 0.3.0 one MCP
-> server serves every project, so this is the last time you configure anything.
->
-> **1. Install or update**
->
-> ```bash
-> pip install -U projectmem
-> ```
->
-> **2. Find the projects you already have**
->
-> ```bash
-> pjm doctor
-> ```
->
-> It looks where code lives — `~/Developer`, `~/code`, `~/projects`, your cloud
-> folders, and every drive on Windows — and lists projects with memory that
-> aren't registered yet. Anything it missed, add by hand:
->
-> ```bash
-> pjm project register "/Users/you/Developer/repos/ossdrop"
-> ```
->
-> **3. Register them**
->
-> ```bash
-> pjm doctor --fix
-> ```
->
-> **4. Connect your AI client: one command, once**
->
-> In any project, run `pjm init` with the client you use:
->
-> ```bash
-> pjm init --agent claude-code   # or: codex, cursor, antigravity, claude-desktop
-> ```
->
-> It adds the projectmem MCP server to that client's user config, once for
-> every project. For Claude Code and Codex it also installs the edit hook, so
-> your agent sees a file's open issues, failed attempts and decisions before it
-> edits that file. Your other MCP servers and settings stay as they are, and a
-> config it cannot read is left untouched. Repeat `--agent` for several
-> clients. **Then start a new session, or fully restart a desktop app**: MCP
-> servers only load on start.
->
-> Prefer to paste it by hand, or use another client? `pjm init` without
-> `--agent` prints this block with your own Python path filled in:
->
-> ```json
-> "mcpServers": {
->   "projectmem": {
->     "command": "/absolute/path/to/python",
->     "args": ["-m", "projectmem.mcp_server"]
->   }
-> }
-> ```
->
-> No `--root`, no `cwd` — that's what makes it serve everything. Per-client
-> instructions are in [MCP Integration](#mcp-integration-recommended).
->
-> **5. Check your work**
->
-> ```bash
-> pjm doctor
-> ```
->
-> Add `--online` if you also want it to tell you when a newer projectmem is out
-> — projectmem makes no network calls otherwise, and `--auto` turns that into a
-> once-a-day check if you prefer.
->
-> Run it again after editing the config. It flags any client still pinned to a
-> single repo — the most common reason a new project is invisible to your agent.
->
-> **All green? You're done.** From here on it is one command per repo:
->
-> ```bash
-> pjm init
-> ```
->
-> Your agent reads what the project already learned instead of rediscovering it,
-> and writes down what it finds. Fewer tokens, no repeated dead ends, memory that
-> outlives the session.
->
-> **Rather let your AI do it?** Paste this into Claude Code, Codex or Cursor:
->
-> ```text
-> Set up projectmem for this project: install it with `pipx install projectmem`
-> (or `pip install projectmem`), then run `pjm init --agent <client>` here with
-> the client you are running in: claude-code, codex, cursor, antigravity or
-> claude-desktop. Show me the output, then tell me to start a new session.
-> ```
+Every new session starts from zero. The agent forgets yesterday's decisions,
+retries debugging approaches that already failed, and spends thousands of tokens
+re-reading source files to rebuild context it had the day before.
 
----
+Telling the agent to check its notes first is not enough. On one real project,
+agents looked up a file's history before only **11% of 8,355 edits**, even though
+their instructions asked for it every time
+([measurements in #37](https://github.com/riponcm/projectmem/issues/37)). So
+projectmem brings the lessons to the agent: right before an edit, and again at
+`git commit`.
 
-## What is coding agent memory?
+Git records *what* changed. projectmem records *why*: what was tried, what failed,
+and what was decided.
 
-**Coding agent memory is a persistent record of what happened while building a
-project** — the issues hit, the approaches attempted, the fixes that worked and
-the decisions made — stored so an AI coding agent can read it at the start of a
-new session. Without it every session begins from zero.
+## Quick start
 
-projectmem is an open-source **agent memory** layer built for that job. It is
-**local-first**: memory lives in a plain `.projectmem/` directory inside your
-repository, with no cloud, no account and no telemetry — the only network call
-it can make is an update check you turn on yourself. A native **MCP server**
-exposes 19 tools to Claude Code, Claude Desktop, Cursor, Antigravity and Codex,
-so your agent reads memory and logs its work on its own.
+### New to projectmem
 
-Unlike chat-history memory tools, projectmem stores **typed events** — issues,
-attempts, fixes, decisions, notes — which is what makes its signature feature possible: a **pre-commit warning**
-that fires *before* you repeat an approach that already failed in this project.
+#### <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/assets/readme/step-1.svg" width="24" height="24" alt="Step 1" align="top"> Install projectmem
 
 ```bash
-pip install projectmem
-cd your-project && pjm init
+pipx install projectmem          # or: pip install projectmem
 ```
 
----
-
-## 🎬 Watch the demo
-
-<p align="center">
-  <a href="https://youtu.be/pELGdXHj_Ls">
-    <img src="https://img.youtube.com/vi/pELGdXHj_Ls/maxresdefault.jpg" alt="projectmem — 60-second demo" width="720" />
-  </a>
-  <br />
-  <em>Full screen-recorded tutorial- watch on YouTube</em>
-</p>
-
-## 📚 Docs
-
-| Doc | What's in it |
-|---|---|
-| **[Complete setup guide](https://projectmem.dev/blog/projectmem-complete-guide-ai-coding-agent-memory)** | The full walkthrough on the web — install, MCP setup per client, `pjm doctor`, your first logged issue, and both dashboards. Every terminal output is captured from a real run. |
-| **[TUTORIAL.md](https://github.com/riponcm/projectmem/blob/main/TUTORIAL.md)** | 15-minute step-by-step walkthrough — set up projectmem on your own project, watch the lifecycle, see the pre-commit warning fire. |
-| **[CHANGELOG.md](https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md)** | Release history. Latest: v0.3.7 — one command connects your AI client, `pjm import` from agentmemory and mem0, private keys redacted whole. |
-| **[Research paper (arXiv:2606.12329)](https://arxiv.org/abs/2606.12329)** | *PROJECTMEM: A Local-First, Event-Sourced Memory and Judgment Layer for AI Coding Agents* — the peer-readable version: design, Memory-as-Governance framing, capability comparison, and the 207-event dogfooding study. |
-| **[LICENSE](https://github.com/riponcm/projectmem/blob/main/LICENSE)** | MIT |
-
----
-
-## The Problem
-
-Every new AI session starts from zero. Claude, Cursor, Aider — they all forget yesterday's decisions, repeat failed debugging attempts, and burn millions of tokens reconstructing context from raw source files.
-
-The model isn't the problem. **The architecture is.** Stateless models need a memory cortex.
-
-## The Solution
-
-`projectmem` is the local-first memory + judgment layer that sits above your AI tools. It captures every failed attempt, decision, and gotcha — then injects that experience back into future AI sessions. Git tracks *what* changed. `projectmem` tracks *why* it changed, what was tried, and what failed.
-
-## Install
-
-> **First time here?** → **[The complete setup guide](https://projectmem.dev/blog/projectmem-complete-guide-ai-coding-agent-memory)**
-> walks the whole path end to end: install, connecting Claude Desktop, Claude Code,
-> Cursor, Codex or Antigravity, checking it with `pjm doctor`, and reading your
-> memory back through the dashboards — with the real terminal output at every step.
-
-Three commands to a project that remembers:
+#### <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/assets/readme/step-2.svg" width="24" height="24" alt="Step 2" align="top"> Connect your AI client
 
 ```bash
-pip install projectmem
 cd your-project
-pjm init
+pjm init --agent claude-code     # or: codex, cursor, antigravity, claude-desktop
 ```
 
-That's it. `pjm init` installs three git hooks (pre-commit warnings, post-commit classification, post-merge tracking), auto-starts a real-time file watcher, inherits cross-project memory if available, and creates `.projectmem/`. Capture is active from minute one.
+`pjm init` creates `.projectmem/` and installs three git hooks. `--agent` adds
+the projectmem MCP server to that client's config, once for every project, and
+for Claude Code and Codex also the edit hook that shows a file's lessons before
+each edit. Your other MCP servers and settings are left as they are.
 
-> The canonical command is `projectmem`. A `pjm` alias is installed for speed.
+#### <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/assets/readme/step-3.svg" width="24" height="24" alt="Step 3" align="top"> Start a new session
 
----
+Start a new session, or fully quit and reopen a desktop app: MCP servers only
+load on start. Your agent then loads the project's memory itself. In each new
+repository after that, `pjm init` is all it takes.
 
-## ✨ New in 0.3.7 — one command connects your AI client, and your history comes with you
-
-**No more pasting config.** Connecting a client to projectmem used to mean
-finding its config file and pasting a block into it. Now one command does it:
-
-```bash
-pjm init --agent claude-code   # or: codex, cursor, antigravity, claude-desktop
-```
-
-It adds the MCP server to that client's user config, once for every project,
-and for Claude Code and Codex it also installs the edit hook from 0.3.6.
-Claude Code and Codex are set up through their own `claude mcp add` and
-`codex mcp add`. For Cursor, Antigravity and Claude Desktop, only the
-`projectmem` entry is added: your other servers and settings stay as they
-were, and the previous file is kept as a backup. A config it cannot read is
-left untouched, and running it twice changes nothing. Your AI can run it for
-you, too: see [Start here](#-start-here--five-minutes-once).
-
-**Switching from agentmemory or mem0? Bring your history.** Export it, then:
-
-```bash
-pjm import agentmemory-export.json --from agentmemory   # or: --from mem0
-```
-
-Only the useful part comes over: decisions, lessons and past failures,
-mapped onto projectmem's own issues, attempts, decisions and notes. Raw
-activity such as file reads, writes and commands is dropped, and so are other
-projects' records. The first run only shows what would be imported; add
-`--apply` to write it. Past failures land on their files, so precheck and the
-edit hook warn before your agent repeats them. Importing twice adds nothing.
-Get the export with `curl -s http://localhost:3111/agentmemory/export` while
-agentmemory runs, or with mem0's `get_all`.
-
-**Private keys are redacted whole.** Only the `BEGIN … PRIVATE KEY` line used
-to be replaced, so the key itself reached `events.jsonl`. Now the whole block
-is redacted. Contributed by [@bardrop](https://github.com/bardrop).
-([#38](https://github.com/riponcm/projectmem/pull/38))
-
-**Backfill handles a `|` in a commit message.** It used to stop at such a
-commit, and `pjm init` then imported no history at all. Reported by
-[@Fonsi44](https://github.com/Fonsi44).
-([#39](https://github.com/riponcm/projectmem/issues/39))
-
----
-
-## ✨ New in 0.3.6 — lessons before every edit, and a precheck that remembers
-
-**Your agent sees a file's lessons right before it edits it.** Agents were
-asked to call `precheck_file` before editing, and mostly did not. A new edit
-hook for Claude Code and Codex CLI puts the file's open issues, failed and
-partial attempts and decisions in front of the agent at the moment it edits,
-once per file per session, and adds nothing for a file with no lessons.
-Install it once for every project:
-
-```bash
-pjm hooks install --agent claude-code   # or: --agent codex
-```
-
-It takes effect in the next session. ([#37](https://github.com/riponcm/projectmem/issues/37))
-
-**Precheck shows what already failed, however long ago.** An attempt logged
-without its own location now counts for its issue's file, partial attempts
-count as lessons, and old failures no longer drop out after 30 days. On the
-reporter's real project, precheck showed the earlier failures for 72.5% of
-cases instead of 33.3%. `precheck_files` checks several files in one call.
-([#32](https://github.com/riponcm/projectmem/issues/32))
-
-**Parallel sessions keep to their own issues.** With two agents on one project,
-an attempt or fix without an `issue_id` went to the newest issue, and one agent
-could close the other's. While several issues are open, `record_attempt` and
-`record_fix` now ask for the `issue_id` and list the open ones.
-([#33](https://github.com/riponcm/projectmem/issues/33))
-
-**One call to start a session.** `start_session()` returns the rules, the
-memory summary and the current plan together.
-([#34](https://github.com/riponcm/projectmem/issues/34))
-
-**Smaller replies.** Write tools reply with the new id instead of repeating
-the text, search results are clipped around the match, and the summary's Key
-files list holds only real files, ranked by how often memory cites them.
-([#35](https://github.com/riponcm/projectmem/pull/35),
-[#36](https://github.com/riponcm/projectmem/pull/36))
-
-**Upgrading? Run `pjm init` once in each project** so its `CLAUDE.md` /
-`AGENTS.md` bridge names `start_session()`.
-
-All of 0.3.6 was reported, measured and contributed by
-[@bigfree](https://github.com/bigfree) (Adam Mikó).
-
-## ✨ New in 0.3.5 — warnings for every spelling, and a summary that stays small
-
-**Precheck recognises a file however its path is spelled.** Events store
-project-relative paths, so asking about `./src/auth.py`, an absolute path, a
-path through a symlinked folder or a Windows `C:\` path matched nothing, and
-precheck called a file with known failures "Safe to modify". Every spelling now
-gets the same warnings, and checking is faster on large logs.
-`get_issue("1")` and `get_issue("#1")` find issue 0001.
-([#26](https://github.com/riponcm/projectmem/pull/26))
-
-**Long entries no longer bloat the summary.** 0.3.4 capped how many entries
-the summary shows, not how long each one is. Records are now clipped at 300
-characters, and a fixed issue takes one line. On a real 238-event project the
-summary went from 8,974 tokens to 3,458.
-([#29](https://github.com/riponcm/projectmem/issues/29),
-[#30](https://github.com/riponcm/projectmem/pull/30))
-
-**Upgrading? Run `pjm init` once in each project.** The instructions now ask
-agents for shorter records, and `pjm init` refreshes `AI_INSTRUCTIONS.md`,
-keeping your previous copy as `AI_INSTRUCTIONS.md.bak`.
-
-The #26 fixes were contributed by [@vishalhabib99](https://github.com/vishalhabib99),
-and #29 was reported and fixed by [@bigfree](https://github.com/bigfree).
-
-## ✨ New in 0.3.4 — memory that stays small, and warnings you can trust
-
-**The summary no longer grows forever.** Notes were capped, but Recent issues
-and Decisions listed everything ever logged, so on an aged project reading the
-memory cost more than reading the code. Every **open** issue is still shown —
-the newest 20 in full, older ones by id — while fixed issues are capped at the
-newest 10 and decisions at the newest 15, each with a line saying what was left
-out and where to find it. On a test project with 25 issues and 60 decisions the
-summary went from about 2,900 tokens to about 1,100.
-([#19](https://github.com/riponcm/projectmem/issues/19))
-
-**Commits are filed under the code they change.** Auto-capture used the first
-changed path in git's sort order, which was usually the regenerated
-`.projectmem/summary.md` — so valid memories were flagged stale and the real
-file lost its history. The location is now the source file the commit is about,
-with deletions, renames, merges and a repository's first commit handled.
-([#20](https://github.com/riponcm/projectmem/issues/20))
-
-**Stale warnings no longer depend on your time zone.** A 0.3.3 speed-up compared
-git's local-time commit dates with UTC event times as text: west of UTC, recent
-stale memories were never flagged; east of UTC, fresh ones were flagged at once.
-Both sides are compared in UTC now, and events already filed under
-`.projectmem/` stop warning without your log being rewritten.
-
-**The guidance names the tools' real arguments.** It gave `precheck_file` and
-`get_issue` the wrong argument names (`path` and `id`, where the tools take
-`file_path` and `issue_id`) and showed `search_events` without its required
-`query`, so an agent copying the call got a validation error. A test
-now checks every call shown to an agent against the tool's actual signature.
-([#18](https://github.com/riponcm/projectmem/issues/18))
-
-**Upgrading? Run `pjm init` once in each project.** Older projects kept the
-`AI_INSTRUCTIONS.md` and git hooks of the release that created them, so fixes to
-either never arrived. `pjm init` now refreshes both — your previous instructions
-are kept as `AI_INSTRUCTIONS.md.bak`, and anything of yours outside
-projectmem's block in a hook is left untouched.
-
-Also: a mistyped issue id no longer breaks every later command, `pjm precheck`
-stops warning about projectmem's own files, and Python 3.13 and 3.14 are
-supported.
-
-Fixes for #18 and #20 were contributed by [Rohan Tiwari](https://github.com/RTE404),
-and the first cap for #19 by [hylin](https://github.com/linhongyu510). #18 and #19
-were reported by [@medium-effort](https://github.com/medium-effort), #20 by
-[@bigfree](https://github.com/bigfree).
-
-## ✨ New in 0.3.3 — precheck stops getting slower, and Windows works end to end
-
-`pjm precheck` runs before every edit — the instructions tell agents to call it
-first — so its cost is paid constantly. It was taking **26 seconds on a
-1,200-event project**, and getting worse every week, because it ran one
-`git log` per event to answer a question about a single file. It now makes one
-call per distinct *file*, bounded by the oldest event citing it.
-
-| events | before | after |
-|---|---|---|
-| 100 | 2,210 ms | 48 ms |
-| 400 | 8,905 ms | 51 ms |
-| 1,500 | ~33 s, 1,501 git processes | **82 ms, 2 processes** |
-
-Latency is now flat rather than linear in project age. Results matched a
-reimplementation of the old algorithm, including across merge commits — except
-for a time-zone bug this change introduced, which 0.3.4 fixes.
-
-**A retired decision no longer resurfaces.** `supersedes` has existed since
-0.1.4, but the two surfaces an agent actually reads during work — `get_context`
-and `precheck_file` — were not filtering it. You could retire a decision and
-still be told about it. Both filter now, and `AI_INSTRUCTIONS.md` finally
-documents how to retire one, which is why models never called it.
-
-**Your project is named in the bridge file, and `AGENTS.md` is written too.**
-One server serves every project, so a call naming none is refused rather than
-guessed at — but nothing told the agent the name, so it learned it from the
-error and retried, every session. The name is in the bridge now. It goes into
-`AGENTS.md` as well as `CLAUDE.md`, because Antigravity and Codex never read
-the latter.
-
-**Six Windows reports are closed.** Git hooks shipped a `bash` shebang that
-Git for Windows often cannot resolve — and an unresolvable shebang does not
-skip the hook, it aborts your commit. The baked binary path lost its
-backslashes to shell escaping. The venv fallback looked in `bin/`, which
-cannot exist there. `pjm watch --daemon` could not be seen or stopped. And a
-box-drawing character in the output killed `pjm init` outright on a cp1252
-console — after it had already created everything, so the command both did its
-work and reported failure.
-
-Every one was fixed by running projectmem on the machines that reported it —
-Windows 11, and three MCP clients (Antigravity, Claude, and Codex) — not by reading the code. Reported by
-[@medium-effort](https://github.com/riponcm/projectmem/issues), who also
-contributed the 0.3.2 Windows daemon support.
-
-## ✨ New in 0.3.2 — Windows, properly
-
-`pjm watch --daemon` crashed on Windows with `AttributeError: module 'os' has no
-attribute 'fork'`. It now spawns a detached worker instead of forking, so
-background watching works on every platform.
-
-Fixing that uncovered a second bug hiding behind it. Liveness was checked with
-`os.kill(pid, 0)` — a POSIX idiom that does not port, because on Windows
-`os.kill` routes to `TerminateProcess` and signal 0 is not a check at all. The
-watcher could not be seen or stopped there, and each `pjm watch --daemon` leaked
-another process. Both are fixed.
-
-Windows daemon support was contributed by
-[@medium-effort](https://github.com/medium-effort) ([#13](https://github.com/riponcm/projectmem/pull/13)).
-
-`pjm doctor` also got two things. It now tells you to **quit your AI client
-before editing its config** — those files hold the app's own preferences too, so
-a running client can rewrite the whole thing on exit and restore the `--root`
-you just removed. And it remembers what it saw last time, so a config that was
-clean and is pinned again gets named as a revert rather than looking like doctor
-being flaky. Local files only; nothing leaves your machine.
-
-## ✨ New in 0.3.1 — know when to upgrade
-
-Both dashboards now show which version generated the page, with a **check for
-updates** link beside it. The page makes no request until you click — PyPI's
-public JSON is fetched straight from your browser and nothing about your machine
-is sent. On the command line, `pjm doctor --online` checks once and
-`pjm doctor --auto` remembers to check daily; both are off unless you ask.
-
-## ✨ New in 0.3.0 — one server, many projects
-
-Until now an MCP config was tied to one repository: eleven projects meant eleven
-server entries and eleven restarts. **0.3.0 serves every registered project from
-a single server.** Paste the config once; every repo you `pjm init` afterwards is
-reachable from it.
-
-```bash
-pjm project list          # what this server can reach
-pjm project use ossdrop   # the default when a call names no project
-```
-
-```
-log_issue(summary="stars come back empty", project="ossdrop")
-→ Logged issue #0019 → ossdrop
-```
-
-Every write names the project it landed in — in a shared server, the dangerous
-failure is not "nothing works", it is a write that succeeds against the wrong
-repo. Existing `--root` configs keep working untouched, and a pinned server now
-*refuses* to write anywhere else even when asked.
-
-Also in 0.3.0:
-
-- **Fixed: the MCP server was broken on fresh installs.** mcp 2.0 renamed
-  `FastMCP` and left the old import path raising — since 2026-07-28 every new
-  `pip install projectmem` got a server that died at import. Caught and fixed by
-  [@VIVAAN-DHAWAN](https://github.com/riponcm/projectmem/pull/10).
-- **Security: stored XSS in `pjm visualize`.** Event summaries reached the DOM
-  unescaped, and git commit messages become event summaries — so a crafted
-  commit in a branch you pulled could run script in your dashboard. Every sink
-  is escaped now.
-- **A rebuilt dashboard** — a shareable Memory Card, case files with the full
-  issue → attempt → fix chain, an effort treemap, per-file dossiers, and a
-  global view that opens with where you left off.
-
-Registry migration is automatic: the 0.2.x list of paths is converted on first
-read, with a `.bak` kept beside it.
-
-## ✨ New in 0.2.0 — the workspace release
-
-0.1.6 made *one* project's memory something you could watch. **0.2.0 lifts that to your whole workspace — and closes the gap between what *happened* (memory) and what your code *is* (structure).**
-
-- 🌐 **Global dashboard** — `pjm dashboard` is one page over *every* project you've `pjm init`-ed: total issues captured, fixes confirmed, dead-ends prevented, tokens saved, a grade per project, and a "needs attention" list. Click any card to open that repo's own dashboard, generated fresh. It's a global **view, not a global store** — each repo's `.projectmem/` is aggregated at read time and never leaves its folder. Default is serverless (a static snapshot); add **`--serve`** for a tiny, ephemeral live server where the Refresh button re-reads your files — no background daemon, **Ctrl+C** stops it.
-- 🧬 **Structure & relations** — `pjm map --build` (run automatically at `pjm init`) walks your codebase and, for Python, resolves imports into a real dependency graph. The Project Map's **Graph** and **Flow** views now render actual files and the import edges between them. The cache (`structure.json`) is derived from code, gitignored, and never committed — code is only ever *read*.
-- 🔥 **Failure heat on structure** *(the combo)* — the one view a pure code-grapher can't draw and a pure memory tool can't either: files with repeated failed attempts glow red, laid directly over the real import graph. Structure comes from the code, heat comes from your memory, and they meet only in the renderer.
-- 🗂️ **`plan.md`** — a new editable intent file: **ideas and plans, what you *mean* to do** — deliberately *not* the event log. `events.jsonl → summary.md` records what happened; `plan.md` records what you intend. The AI reads it at session start and edits it directly; a plan never becomes an event. `pjm plan` / `pjm plan "idea"` / MCP `get_plan()`.
-
-Everything stays 100% local — the global dashboard is a read-time aggregate, never a central honeypot of your code's history.
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/brand/dashboard-global.png" alt="projectmem global dashboard — every project in one read-time view" width="880" />
-  <br /><em>Global Dashboard — every <code>pjm init</code>-ed project in one view: grades, issues, savings, and a "needs attention" list, aggregated at read time. Each card opens that repo's own dashboard.</em>
-</p>
-
-### The visualization suite (shipped in 0.1.6)
-
-Your project's memory is also something you can *watch* — and share.
-
-- 🎬 **Showoff** — a dashboard tab with three animated story scenes, all rendered from your real event log: **Story Replay** (watch your project's history build itself, node by node), **Orbit** (files orbit the project, events orbit their file), and **Universe** (your project as a rotating galaxy — every bright star is a real issue, attempt, fix, or decision; click one for its full details).
-- ⏺ **Built-in recorder** — hit REC (10–60 s) and Showoff downloads a `.webm` clip of the animation, rendered 100% locally with a "made with projectmem" badge. Your debugging story, ready for a tweet or a standup.
-- 🗺️ **Flow** — the Project Map's default view: a layered flowchart reading `PROJECT → DIRECTORIES → FILES → WHAT HAPPENED → MEMORY`. Files with repeated failures glow red along their path, every file shows its outcome chips, and everything flows into the `events.jsonl` cylinder. Tree and Graph views are one click away.
-- 🧵 **Time Spine** — the Timeline's default view: a real-time axis you scroll, with **problems branching left** (issues, failed attempts) and **knowledge branching right** (fixes, decisions, notes). Hover any card and its whole issue thread lights up. The classic list remains as "Details".
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/brand/dashboard-showoff-universe.png" alt="Showoff — your project as a rotating galaxy, every star a real event" width="800" />
-  <br /><em>Showoff · Universe — every bright star is a real event from this project's memory</em>
-</p>
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/brand/dashboard-projectmap-flow.png" alt="Flow — layered project map from project to memory" width="800" />
-  <br /><em>Project Map · Flow — what happened, file by file, flowing into append-only memory</em>
-</p>
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/brand/dashboard-timeline-spine.png" alt="Time Spine — problems branch left, knowledge branches right" width="800" />
-  <br /><em>Timeline · Time Spine — problems on the left, knowledge on the right, real time down the middle</em>
-</p>
-
----
-
-## Why You'll Love It
-
-- **Pre-Commit Warnings** — `pjm precheck` warns you *before* you commit if you're about to repeat a failed approach, modify a high-churn file, or touch an unresolved issue. It works from this project's own recorded failures, which is why it needs the memory layer underneath. The warning now lists the dead ends themselves (*"What already failed here: ✗ tried CSS contain:layout"*), and `pjm precheck --snooze 2h` silences it politely — the snooze is itself logged, so even the silence is audited.
-- **Stale-Memory Detection** *(new in 0.1.4)* — projectmem **never deletes** a memory. Every decision that cites a file is cross-checked against that file's git history — when the file has moved on, the memory is *flagged* ("predates 7 commits to auth.py — confirm or supersede") and a human decides. Retire it cleanly with `pjm decision "new way" --supersedes <id>`: the old event stays in the log, tagged, forever.
-- **Session-Start Briefing** *(new in 0.1.4)* — `pjm brief` answers "where was I?" in one screen: active warnings, possibly-stale memories, open issues, recent decisions, stack gotchas, and your prevention score with a week-over-week delta.
-- **Memory for agents without MCP** *(new in 0.1.4)* — `pjm export --claude-md` compiles live decisions, gotchas, and a "Do NOT retry — these already failed" list into a marked block in CLAUDE.md (or `.cursorrules`). Copilot, plain Claude, any agent that reads the file inherits your project's judgment.
-- **Smart Context Injection** — `pjm wrap claude` (or cursor/aider) injects a token-budgeted memory block into your AI before the session opens. Your AI starts experienced, not blank.
-- **Estimated ROI Score** — `pjm score` outputs a letter grade (A+ → F) with the tool's own estimates of debugging hours saved, tokens avoided, and dollars saved. CI-friendly JSON output and shields.io badge for your README.
-- **Cross-Project Memory** — Lessons learned in one repo follow you forever. Library gotchas, decisions, and patterns live in `~/.projectmem/global/` and are inherited by new projects. A project with a manifest (`pyproject.toml`, `requirements.txt`, `package.json`, `Cargo.toml`, `go.mod`) is offered only the lessons for its stack.
-- **Real-time File Watcher** — Background daemon detects rapid edits to the same file (debugging sessions) between commits. Battery-aware, gitignore-aware, auto-started by `pjm init`.
-- **Native MCP Server** — Plugs into Claude Desktop, Cursor, Antigravity, Codex, and any MCP-compatible tool. 17 native tools force the AI to read context, check files for known failures, read your `plan.md`, and log work automatically. Verified end-to-end in all four clients at first release; the 0.3.3 acceptance suite was re-run in Antigravity, Claude, and Codex.
-- **Interactive Dashboard** *(expanded in 0.1.6)* — `pjm visualize` opens a six-tab local dashboard: Overview, Story Map (failure heatmap with collapse/focus controls), ROI Dashboard, Project Map (**Flow** / Tree / Graph, now over your real code structure), Timeline (**Time Spine** / Details), and **Showoff** — animated story scenes with a built-in video recorder.
-- **One MCP server for every project** *(new in 0.3.0)* — configure your client once instead of once per repository. Calls name their project (`project="ossdrop"`), or fall back to the active one; every write reports which repo it landed in, and a pinned `--root` server refuses to write outside its own. Existing single-project setups are untouched.
-- **Global Dashboard** *(new in 0.2.0)* — `pjm dashboard` is one cross-project view over every repo you've `pjm init`-ed: grades, issues, savings, and per-project drill-in. A global *view*, never a global *store* — each repo's memory is aggregated at read time and never leaves its folder. Serverless by default; `--serve` for an ephemeral live server (Ctrl+C to stop).
-- **Code Structure + Judgment** *(new in 0.2.0)* — `pjm map --build` reads your codebase into a real import graph, and the Project Map overlays **failure heat** from your event log on top: the files that keep breaking, glowing red over the structure that actually connects them. The structure cache is derived from code and gitignored — never committed.
-- **Intent, separate from memory** *(new in 0.2.0)* — `plan.md` holds ideas and plans (what you *mean* to do), kept deliberately apart from the append-only event log (what *happened*). `pjm plan`, or the MCP `get_plan()`; the AI edits it directly and a plan never becomes an event.
-- **100% Local** — No cloud, no telemetry, no accounts. Your code, your memory, your machine.
-
-## How It Compares
-
-| Capability | **projectmem** | claude-mem | agentmemory | mem0 | Letta |
-|---|:---:|:---:|:---:|:---:|:---:|
-| Core focus | **Memory + judgment** | Session capture | Memory engine | Chat / user memory | Agent harness |
-| Warns before a commit from a file's own failure history | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Checks memory for staleness against git history | ✅ | ❌ | 🟡 links sessions to commits; time decay | ❌ | ❌ |
-| Failed attempts as typed events | ✅ worked / partial / failed | 🟡 bugfix type | 🟡 captures tool failures | ❌ | ❌ |
-| Keeps superseded memories (no deletion) | ✅ | ? | 🟡 versioned, but decay can evict | ✅ add-only since v3 | ✅ git-versioned memory |
-| Cross-project lessons | ✅ stack-scoped with a manifest | 🟡 opt-in flag | 🟡 cross-project search | 🟡 user-scoped | 🟡 per agent |
-| Runs locally with no LLM API key | ✅ | 🟡 local store, LLM compression | ✅ keyless mode | ❌ self-host needs a key | 🟡 local mode |
-| Native MCP server | ✅ 19 tools | ✅ | ✅ 54 tools | 🟡 hosted only | ❌ MCP client |
-| Price · licence | Free · MIT | Free · Apache-2.0, paid Pro | Free · Apache-2.0 | Free tier · Apache-2.0, paid cloud | Free tier · Apache-2.0, paid cloud |
-
-<sub>✅ yes · 🟡 partial · ❌ not found in the project's own docs · ? not documented. Snapshot taken 2026-10-02 from each project's README, docs and changelog; design capabilities, not benchmark results. Corrections welcome — [open an issue](https://github.com/riponcm/projectmem/issues).</sub>
-
-<sub>There is **no database** and **nothing you have to keep running**: the MCP server is a stdio subprocess your AI client spawns, and everything else is plain files. The only server anywhere is the *optional* `pjm dashboard --serve`, an ephemeral local viewer you start and stop with Ctrl+C.</sub>
-
-## 🚧 Upcoming
-
-- **More import sources** — `pjm import` brings history over from **agentmemory** and **mem0** since 0.3.7. **Letta** and Claude session logs are next, with the same rule: only what maps onto issues, attempts, fixes, decisions and notes comes in, so signal comes in and another tool's clutter stays out.
-
-Want a source supported? [Open an issue](https://github.com/riponcm/projectmem/issues) and tell us what you're migrating from.
-
-## How AI Reads Your Memory (Token Efficiency)
-
-The architecture is built around one rule: **AI reads small, distilled files. Tools generate them from the big raw log.**
-
-*Measured on 0.3.5 with the `cl100k_base` tokenizer, on nine real projects of
-9 to 238 events.* At session start an agent reads three files.
-`AI_INSTRUCTIONS.md` is about 3,300 tokens and costs the same in every project.
-`summary.md` ranged from about 400 to 3,500 tokens, and `PROJECT_MAP.md` from
-about 100 to 900. A synthetic worst case with 40 open issues and long entries in
-every record brings the summary to about 6,300. The baseline and `pjm wrap` rows
-are estimates.
-
-| Access mode | Tokens / session | How it works |
-|---|---|---|
-| No projectmem (baseline) | 5,000 – 20,000+ | AI re-reads source files every session |
-| Universal Mode (markdown) | ~3,700 – 7,600 | AI reads 3 distilled files once |
-| **MCP Mode** *(recommended)* | **~3,700 – 7,600** at session start | AI calls `start_session()` once (rules, summary and current plan), then `get_issue(issue_id)` or `precheck_file(file_path)` only when relevant |
-| `pjm wrap` (pre-injection) | 500 – 2,000 | Pre-generated, you set the budget |
-
-**AI never reads `events.jsonl` directly.** That file is for tools (`pjm score`, `pjm context`, `pjm wrap`). Tools distill the raw log into compact AI-readable summaries.
-
-## One server, many projects
-
-Since 0.3.0 a single MCP server serves every project you have registered. Paste
-the config once and every repo you `pjm init` afterwards is reachable from it —
-no second entry, no restart.
-
-```bash
-pjm project list          # what this server can reach
-pjm project use ossdrop   # the default when a call names no project
-pjm project alias ossdrop od
-```
-
-Your agent picks the project per call:
-
-```
-log_issue(summary="stars come back empty", project="ossdrop")
-→ Logged issue #0019 → ossdrop
-```
-
-**Every write says where it landed.** That echo is the point: in a one-project
-setup a misconfigured server simply fails, but a shared server can succeed
-against the wrong repository, which corrupts two audit trails at once. If the
-name in the reply is not the project you meant, stop.
-
-How a call is routed, highest first:
-
-| | Source | Notes |
-|---|---|---|
-| 1 | `--root` at startup | A boundary, not a default. A pinned server refuses to write elsewhere, even when asked. |
-| 2 | `project="…"` on the call | id, alias or path. An unknown name is an error. |
-| 3 | The client's workspace root | *Planned for 0.4.0* — the resolver supports it, but MCP clients don't pass their roots to it yet. |
-| 4 | The active project | `pjm project use <name>`. |
-| 5 | The working directory | Walks up looking for `.projectmem/`, like git. |
-| 6 | — | Refuses, and lists what is registered. It never guesses. |
-
-Once client roots are wired in, they will outrank the active project on
-purpose: the root is where you are now, the active project is a mode you set
-days ago. When they disagree, the stale one is the wrong answer.
-
-Single-repo setups are untouched — `pjm init --mcp-config-single` still prints
-the pinned config, and an existing `--root` entry keeps working exactly as before.
-
-## MCP Integration (Recommended)
-
-**For:** Claude Desktop, Cursor, Antigravity, Codex — and any tool with native MCP support. The MCP server forces the AI to read memory and log every action automatically.
-
-**Since 0.3.0 you configure this once, not once per repository.** The block below has no `--root`: the server serves every project you have registered, and each call resolves its own. Paste it, and every repo you `pjm init` from then on is reachable — no second entry, no restart.
-
-```json
-"mcpServers": {
-  "projectmem": {
-    "command": "/opt/anaconda3/bin/python",
-    "args": ["-m", "projectmem.mcp_server"]
-  }
-}
-```
-
-**Upgrading with projects you already have?** The registry only ever recorded
-projects you ran `pjm init` on since it existed (0.2.0), so anything older is
-missing — and global mode routes through the registry. One command sorts it out:
-
-```bash
-pjm doctor          # what's unregistered, what's stale, what's still pinned
-pjm doctor --fix    # register what it found
-```
-
-It looks in the places code actually lives — `~/Developer`, `~/code`, `~/src`,
-`~/projects` and friends, plus every fixed drive on Windows, where projects sit
-on `D:\` and `E:\` as often as under your home folder. To point it somewhere
-specific:
-
-```bash
-pjm doctor --path ~/work --path /Volumes/ssd --fix
-pjm project scan D:\ E:\ --depth 3     # the same walk, without the other checks
-```
-
-Nothing is scanned until you run it, and nothing is written without `--fix`.
-After an upgrade the CLI mentions `pjm doctor` once — a wheel install can't run
-code, so the first command you type is the only place to say it.
-
-With one project registered, that is the whole setup — there is only one place a call can go. With several, your AI passes `project="<name>"`, or you set a default with `pjm project use <name>`. `pjm init` prints this block with your own Python path already filled in.
-
-**Upgrading from 0.2.x?** Your existing `--root` entry keeps working exactly as before, and a pinned server now refuses to write outside its own repo even if asked. Replace it with the block above when you want one server for everything.
-
-### The 3-minute workflow (let your AI do the setup)
-
-1. **Install.** `pipx install projectmem` (or `pip install projectmem`).
-2. **Connect your client.** `cd` into your project and run `pjm init --agent claude-code` (or `codex`, `cursor`, `antigravity`, `claude-desktop`), or ask your AI to run it with the client it is running in. It adds the MCP server to the client's config once, for every project, without touching your other servers. The exact config per client is in the sections below if you'd rather paste it by hand.
-3. **Restart the AI tool** so the MCP server loads, then start your session with this prompt:
+**Rather let your AI do it?** Paste this into Claude Code, Codex or Cursor:
 
 ```text
-Hi — I use projectmem as this project's memory. Before anything else,
-call start_session() to load what we already know. As we work, log issues, attempts
-(failed/worked), fixes, decisions, and notes with the projectmem tools,
-and call precheck_file(file_path) before you edit a file. Ideas and plans go
-in plan.md via get_plan() — never as events.
+Set up projectmem for this project: install it with `pipx install projectmem`
+(or `pip install projectmem`), then run `pjm init --agent <client>` here with
+the client you are running in: claude-code, codex, cursor, antigravity or
+claude-desktop. Show me the output, then tell me to start a new session.
 ```
 
-Strictly speaking this prompt is optional — with the MCP server installed correctly the AI discovers the memory on its own. But saying it makes capture noticeably more consistent, so we recommend it.
+### Already using projectmem? Upgrade
 
-- **Repeat for every project:** `pjm init` + the same kickoff prompt.
-- **Coming back after closing the window?** Open with a one-line reminder — *"Reminder: we use projectmem as memory here."* — and the whole setup carries on where you left off.
+This works from any earlier version. Your existing MCP setup keeps working:
+since 0.3.0 one MCP server serves every project.
 
-> Prefer to wire it up by hand? The exact, verified config for each client follows.
-
-### Claude Desktop
-
-**Easiest — open the config from the UI:**
-
-- **macOS:** Claude menu → `Settings…` → `Developer` tab → **Local MCP servers** → **Edit Config**.
-- **Windows / Linux:** same path expected (`Settings → Developer → Edit Config`) — open an issue if your platform differs and we'll update this.
-
-If you prefer the raw file path: `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, `%APPDATA%\Claude\claude_desktop_config.json` on Windows, `~/.config/Claude/claude_desktop_config.json` on Linux (or `$XDG_CONFIG_HOME/Claude/` if you have moved it). `pjm init` prints the right one for the machine you run it on.
-
-Paste this block:
-
-```json
-"mcpServers": {
-  "projectmem": {
-    "command": "/opt/anaconda3/bin/python",
-    "args": ["-m", "projectmem.mcp_server"]
-  }
-}
-```
-
-**Two things to know about this block:**
-
-- **Use the absolute path to `python`** (e.g. `/opt/anaconda3/bin/python`, or run `which python` to find yours). Claude Desktop subprocesses don't inherit your shell `PATH`, so bare `"python"` often fails.
-- **You no longer need the `cwd` field, and you never could rely on it.** Claude Desktop's current build (with the Epitaxy / Cowork workspace system) silently ignores `cwd` — the server ends up running with `cwd=/` and can't find `.projectmem/`. That is why older releases needed `--root`. The registry replaces it: the server finds projects by name, not by where it happens to be running.
-
-<details>
-<summary>Pin this server to a single repo instead</summary>
-
-```json
-"mcpServers": {
-  "projectmem": {
-    "command": "/opt/anaconda3/bin/python",
-    "args": [
-      "-m", "projectmem.mcp_server",
-      "--root", "/absolute/path/to/your/project"
-    ]
-  }
-}
-```
-
-A pinned server serves exactly that repository and refuses to write anywhere else, even when asked — the stricter choice if you want a hard boundary. `pjm init --mcp-config-single` prints this form.
-</details>
-
-Then **fully quit Claude Desktop (Cmd+Q on Mac)** and reopen — MCP servers only initialize on cold start.
-
-### Cursor
-
-Two ways to register the MCP server — pick whichever fits your workflow:
-
-1. **Global (recommended):** Cursor menu → `Settings…` → left sidebar **Tools & MCPs** → **Installed MCP Servers** → **Add Custom MCP**. Paste the JSON below.
-2. **Per-project:** drop the JSON into `<project-root>/.cursor/mcp.json` — only active when that project is open.
-
-```json
-{
-  "mcpServers": {
-    "projectmem": {
-      "command": "/opt/anaconda3/bin/python",
-      "args": ["-m", "projectmem.mcp_server"]
-    }
-  }
-}
-```
-
-**Two things to know about this block (same gotchas as Claude Desktop):**
-
-- **Use the absolute path to `python`** (run `which python` to find yours). Cursor subprocesses don't reliably inherit your shell `PATH`.
-- **Don't bother with the `cwd` field.** Cursor — like Claude Desktop — silently ignores it: the server ends up running with `cwd=~`. Since 0.3.0 that no longer matters, because projects are found by name in the registry rather than by where the server runs.
-
-Registered globally, one entry covers every project. Per-project `.cursor/mcp.json` still works if you prefer the server to exist only when that repo is open — add `"--root", "/absolute/path/to/your/project"` to `args` there to pin it.
-
-Then **fully quit Cursor (Cmd+Q on Mac)** and reopen. projectmem also auto-discovers `.projectmem/` by walking up from CWD (like git does for `.git/`), and honors `PROJECTMEM_ROOT` and a `--root <path>` CLI argument.
-
-### Antigravity
-
-Antigravity (Google's AI IDE) speaks standard MCP.
-
-**Easiest — open the config from the UI:**
-
-1. Open the **Agent** window (the chat panel on the right).
-2. Click the **⋯ Additional Options** button in the panel header.
-3. Choose **MCP Servers** → **Manage MCP Servers** → **Add new** (or **Edit Config**).
-
-The raw file is at `~/.gemini/antigravity/mcp_config.json` if you prefer editing it directly.
-
-Paste this block:
-
-```json
-{
-  "mcpServers": {
-    "projectmem": {
-      "command": "python",
-      "args": ["-m", "projectmem.mcp_server"]
-    }
-  }
-}
-```
-
-Antigravity does honor the `cwd` field, so adding `"cwd": "/absolute/path/to/your/project"` works — but it ties the server to that one repo. Leave it out and the same entry serves every registered project.
-
-Then **fully quit Antigravity (Cmd+Q on Mac)** and reopen — MCP servers only initialize on cold start. All 17 projectmem tools register identically to Claude Desktop / Cursor.
-
-### Codex
-
-Codex stores MCP config as **TOML** (not JSON) in `~/.codex/config.toml`. There's a UI form at `Settings → MCP Servers → Add MCP Server`, but during cross-client verification the form's **Save button didn't reliably persist** — the file-edit path is faster and more reliable.
-
-**Easiest — edit `~/.codex/config.toml` directly:**
-
-Append this block (preserves any existing config):
-
-```toml
-[mcp_servers.projectmem]
-command = "/opt/anaconda3/bin/python"
-args = ["-m", "projectmem.mcp_server"]
-```
-
-Three things to know about this block:
-
-- **Use the absolute path to `python`** (run `which python` to find yours). Codex subprocesses don't reliably inherit your shell `PATH`.
-- **You no longer need `--root` or `cwd`.** Earlier releases passed `--root` as defense in depth (the `cwd` field does appear to work in Codex, unlike Claude Desktop and Cursor). Since 0.3.0 the registry makes both unnecessary — add `"--root", "/absolute/path/to/your/project"` to `args` only if you want this server locked to a single repo.
-- **Set your reasoning effort to `medium` or higher.** On low reasoning, Codex was seen skipping the session-start rules call (`get_instructions`, now part of `start_session()`), which can cause the AI to miss the Setup Mode workflow rules.
-
-**Validate the TOML:**
+#### <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/assets/readme/step-1.svg" width="24" height="24" alt="Step 1" align="top"> Update projectmem
 
 ```bash
-python -c "import tomllib; tomllib.load(open('/Users/<you>/.codex/config.toml','rb')); print('OK')"
+pip install -U projectmem        # or: pipx upgrade projectmem
 ```
 
-Should print `OK`. If not, the parser tells you the offending line.
-
-**Then fully quit Codex (Cmd+Q on Mac) and reopen.** Same cold-start rule as every other MCP client. Codex MCP servers spawn lazily on the first tool call in a chat session — if you don't see the process in `ps aux` right after reopening, send any message to a Codex chat and check again.
-
-**Reasoning-effort note:** Codex's mode selector is at the bottom of the chat input. Set it to `medium` (not `low`) so the session-start call is not skipped. Once set, it persists per-session.
-
-### First-run permission prompts
-
-On first use in any MCP-capable client (Claude Desktop, Cursor, Antigravity, Codex),
-your AI will ask permission before each projectmem tool call. **This is
-expected security behavior** — MCP clients require explicit consent for
-every new tool. Approve each tool once and the prompt won't reappear for
-that session.
-
-### Other MCP Tools
-
-Any MCP-compatible client works — point your tool at
-`python -m projectmem.mcp_server` and either set `cwd` to your project
-root or rely on the parent-walk auto-discovery.
-
-### MCP Tools Exposed
-
-All 19 tools your AI can call. Every repo tool takes an optional
-`project` argument — see [One server, many projects](#one-server-many-projects):
-
-**Read-side (14 tools):**
-
-| Tool | When to use |
-|---|---|
-| `start_session()` | Start of every session — rules, summary and current plan in one call |
-| `get_instructions()` | Load the workflow rules on their own |
-| `get_summary()` | Start and end — distilled project memory |
-| `get_project_map()` | Start — understand repo structure |
-| `get_plan()` | Read `plan.md` — the ideas + plans (intent), separate from the event log |
-| `precheck_file(file_path)` | Before editing any file — surface failure history |
-| `precheck_files(file_paths)` | The same for several files in one call |
-| `get_issue(issue_id)` | Read one specific issue's full history by ID |
-| `search_events(query)` | Plain-text search across all logged events |
-| `get_context(tokens, focus)` | Token-budgeted memory block with optional focus filter |
-| `get_score()` | A+→F prevention score + ROI numbers |
-| `get_global_gotchas(library)` | Cross-project library lessons inherited from past repos |
-| `list_projects()` | See every registered project, and which one is active |
-| `current_project()` | Check which project a call would resolve to, without writing anything |
-
-**Write-side (5 tools):**
-
-| Tool | When to use |
-|---|---|
-| `log_issue(summary, location)` | Immediately when encountering a bug |
-| `record_attempt(summary, outcome, issue_id)` | Immediately after each fix attempt (outcome: `failed`/`partial`/`worked`); `issue_id` is required while several issues are open |
-| `record_fix(summary, issue_id)` | After confirming a fix resolves the issue |
-| `add_decision(summary, supersedes?)` | When making architectural / design decisions; pass `supersedes` to retire a stale decision without losing history |
-| `add_note(summary)` | When discovering gotchas, setup details, or constraints |
-
-## CLI Reference
-
-### Core memory
-
-| Command | Purpose |
-|---|---|
-| `pjm init` | Initialize memory + auto-install hooks + inherit global memory |
-| `pjm import <file> --from agentmemory\|mem0 [--apply]` | Bring decisions, lessons and past failures over from another memory tool; without `--apply` it only shows what would be imported *(new in 0.3.7)* |
-| `pjm init --agent <client>` | Also connect an AI client: `claude-code`, `codex`, `cursor`, `antigravity` or `claude-desktop` (repeatable). Adds the MCP server once for every project and, for Claude Code and Codex, the edit hook *(new in 0.3.7)* |
-| `pjm log <text>` | Start a new issue / debugging session |
-| `pjm attempt <text> [--failed\|--worked]` | Record a fix attempt outcome |
-| `pjm fix <text> [--issue <id>]` | Record the confirmed fix and close the issue — `--issue` targets a specific one *(new in 0.1.5)* |
-| `pjm decision <text> [--supersedes <id>]` | Record an architectural decision; optionally retire a prior one (old event stays in the log, tagged) |
-| `pjm note <text>` | Record durable context or a gotcha |
-| `pjm plan ["idea"]` | Print `plan.md` (ideas + plans); with text, append an idea. Intent, **not** an event *(new in 0.2.0)* |
-| `pjm show` | Print the current summary |
-| `pjm search <query> [--failed-only]` | Plain-text search across all events; `--failed-only` lists the project's dead ends |
-| `pjm brief` | One-screen session-start briefing: warnings, stale memories, open issues, decisions, score |
-| `pjm export [--claude-md\|--cursor]` | Compile live memory into CLAUDE.md / .cursorrules for agents without MCP |
-
-### Intelligence layer
-
-| Command | Purpose |
-|---|---|
-| `pjm watch [--daemon\|--stop\|--status]` | Real-time file churn watcher |
-| `pjm precheck [--snooze 2h\|--unsnooze]` | Warn about repeating failed approaches before commit; snooze politely (audited) when needed |
-| `pjm wrap <agent>` | Inject token-budgeted memory into Claude/Cursor/Aider |
-| `pjm context [--tokens N]` | Generate token-budgeted project context |
-| `pjm score [--format text\|json\|badge]` | Letter-grade prevention score |
-| `pjm global <action>` | Manage cross-project memory |
-
-### Projects (global MCP)
-
-| Command | Purpose |
-|---|---|
-| `pjm doctor [--fix] [--path P] [--online]` | Find unregistered projects, stale entries and pinned client configs. `--online` also asks PyPI for the newest release; `--auto` remembers to check daily *(new in 0.3.0)* |
-| `pjm project list` | Every project this server can reach, and which one is active *(new in 0.3.0)* |
-| `pjm project scan <dirs> [--depth N] [--dry-run]` | Walk for projects with memory and register them |
-| `pjm project register [path] [--alias a]` | Add a project that already has memory (`pjm init` registers automatically) |
-| `pjm project use [name]` | Set the default project for calls that name none; omit the name to clear it |
-| `pjm project alias <name> <alias>` | Give a project a shorter name |
-| `pjm project tag <name> <tag> [--remove]` | Tag a project |
-| `pjm project remove <name>` | Forget a project — its repo and `.projectmem/` are untouched |
-
-### Visualization & utility
-
-| Command | Purpose |
-|---|---|
-| `pjm visualize` | Open the six-tab local dashboard (Overview, Story Map, ROI, Project Map, Timeline, Showoff) |
-| `pjm dashboard [--serve] [--port N]` | Cross-project **global** dashboard over every `pjm init`-ed repo; default writes a static snapshot, `--serve` runs an ephemeral live server (Ctrl+C to stop) *(new in 0.2.0)* |
-| `pjm map [--build]` | Print the Project Map; `--build` (re)builds the code structure + import graph into `structure.json` (a derived, gitignored cache) *(new in 0.2.0)* |
-| `pjm stats` | Token ROI summary in the terminal |
-| `pjm backfill` | Auto-populate memory from git history |
-| `pjm hooks install\|uninstall` | Manage git hooks manually |
-| `pjm hooks install --agent claude-code\|codex` | Show a file's lessons before every edit in Claude Code or Codex (`--project` for this project only) |
-| `pjm regenerate` | Rebuild `summary.md` from `events.jsonl` |
-
-> Use `--at "file.py:42"` with any logging command to attach precise location metadata.
-
-### `plan.md` — intent, kept separate from memory
-
-`pjm init` scaffolds a `.projectmem/plan.md`: your **ideas and plans — what you *mean* to do**, in plain Markdown (Ideas · Active plans · Next · Someday · Shipped). It's the one file that is deliberately **not** the event log:
-
-- `events.jsonl → summary.md` records what *happened* (append-only, never rewritten).
-- `plan.md` records what you *intend* — and you (or the AI) edit it directly, like `PROJECT_MAP.md`.
-
-Your AI reads it at session start — `start_session()` includes the current plan, and `get_plan()` returns the whole file — and updates it in place: adding ideas, checking items off, moving finished work down to **Shipped**. A plan is never logged as an event, so intent stays cleanly out of your memory's audit trail. `pjm plan` prints it; `pjm plan "auto-batch the exporter"` appends an idea. It's committed (not gitignored) so intent is shared with your team.
-
-## Example: Pre-Commit Warnings in Action
+#### <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/assets/readme/step-2.svg" width="24" height="24" alt="Step 2" align="top"> Find and register projects from older versions
 
 ```bash
+pjm doctor --fix
+```
+
+#### <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/assets/readme/step-3.svg" width="24" height="24" alt="Step 3" align="top"> Refresh each project
+
+```bash
+pjm init                         # run once in each project; your memory is kept
+```
+
+This refreshes the project's agent instructions and hooks.
+
+#### <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/assets/readme/step-4.svg" width="24" height="24" alt="Step 4" align="top"> Connect another AI client (optional)
+
+```bash
+pjm init --agent cursor          # or: claude-code, codex, antigravity, claude-desktop
+```
+
+The clients you already set up are not touched. On Claude Code and Codex this
+also installs the edit hook that shows a file's lessons before every edit, so
+run it once there if you set projectmem up before 0.3.6. A client that is
+already connected stays as it is, unless its entry points to an old install,
+which is updated.
+
+### Check your setup with `pjm doctor`
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/assets/readme/doctor.svg" alt="pjm doctor output: finds an unregistered project, confirms registered projects, flags a Cursor config pinned to one repo, and suggests pjm doctor --fix" width="860" />
+</p>
+
+`pjm doctor` looks where code usually lives (`~/Developer`, `~/code`,
+`~/projects`, cloud folders, and every drive on Windows) and reports:
+
+- **projects with memory that aren't registered yet**, so the MCP server can't
+  reach them. `pjm doctor --fix` registers them; `pjm project register <path>`
+  adds one it missed.
+- **registered projects whose memory is gone**, such as a moved or deleted repo.
+- **client configs still pinned to one repository** with `--root`, `cwd` or
+  `PROJECTMEM_ROOT`, the most common reason a new project is invisible to your
+  agent. A pin may be deliberate, so remove it by hand.
+- **your version.** `pjm doctor --online` also checks PyPI for a newer release;
+  projectmem makes no network calls otherwise.
+
+### More ways in
+
+- **Another MCP client, or prefer to paste the config yourself?** Run `pjm init`
+  without `--agent`; it prints the config with your Python path filled in. See
+  [Connect a client by hand](#connect-a-client-by-hand).
+- **Coming from agentmemory or mem0?**
+  `pjm import <export.json> --from agentmemory` (or `--from mem0`) brings your
+  decisions, lessons and past failures over. See
+  [Import from another memory tool](#import-from-another-memory-tool).
+- **Want every step with real output?** Follow
+  [the complete setup guide](https://projectmem.dev/blog/projectmem-complete-guide-ai-coding-agent-memory).
+
+## What your agent sees
+
+**Right before it edits a file** (Claude Code and Codex, through the edit hook):
+
+```text
+projectmem lessons for src/auth/refresh.ts:
+  Open issues on this file:
+    - #0001 Token refresh races under parallel requests
+  Earlier attempts (1 failed, 1 partial), newest first:
+    ~ Retry on 401 halves the failures (#0001, 2026-11-28)
+    x Wrapped the refresh call in a mutex (#0001, 2026-11-28)
+  Decisions on this file:
+    - Refresh tokens rotate per user and are never shared (2026-11-28)
+```
+
+Each file is shown once per session, and a file without lessons adds nothing.
+Other clients get the same lessons from the `precheck_file` tool.
+
+**At `git commit`**, from the pre-commit hook:
+
+```text
 $ git commit -m "switch auth to JWT"
 
 projectmem: Pre-Commit Check
@@ -976,42 +222,380 @@ projectmem: Pre-Commit Check
 3 warning(s). Review before committing.
 ```
 
-Need it quiet for a refactor sprint? `pjm precheck --snooze 2h` — warnings pause, the pause itself is logged, and every commit shows one dim line so silence is never mistaken for a clean check.
+Need quiet for a refactor? `pjm precheck --snooze 2h` pauses the warnings, and
+the pause itself is logged.
 
-## Privacy & Security
+## How projectmem helps
 
-By default, `projectmem` commits the **distilled** files (`summary.md`, `PROJECT_MAP.md`, `AI_INSTRUCTIONS.md`, `issues/`) and gitignores the raw log + runtime files (`events.jsonl`, `watch.pid`, `watch.log`). This means your teammate's AI inherits your team's knowledge automatically — just `git clone` and the AI already knows what your team learned.
+- **Stops repeated dead ends.** Failed and partial attempts are stored per file
+  and shown before the next edit or commit on that file, however long ago they
+  happened.
+- **Starts every session where the last one ended.** `start_session()` returns
+  the rules, the memory summary and the current plan in one call. `pjm brief`
+  gives you the same picture in one screen.
+- **Keeps decisions current.** A decision that cites a file is checked against
+  that file's git history and flagged when the code has moved on. A newer
+  decision retires an older one with `--supersedes`; nothing is ever deleted.
+- **Shares what the team learned.** The distilled files are committed, so a
+  teammate's agent knows the project's history after `git clone`.
+- **Carries library lessons across projects.** Gotchas about a library live in
+  `~/.projectmem/global/` and reach new projects that use the same stack.
+- **Works with agents that have no MCP.** `pjm export --claude-md` writes the
+  decisions, gotchas and a "these already failed" list into `CLAUDE.md` or
+  `.cursorrules`.
+- **Shows the history.** `pjm visualize` opens a local dashboard of every case
+  the project solved and what failed on the way, and `pjm dashboard` gives one
+  view across all your projects without copying their data anywhere.
 
-**Want total privacy?** Add a single line `.projectmem/` to your `.gitignore`. Nothing leaves your machine.
+<div align="center">
+  <img src="https://raw.githubusercontent.com/projectmem/projectmemdoc/main/screenshots/dashboard-overview-0.3.0.png" alt="projectmem dashboard: memory card, failure heatmap, ROI and case files for one project" width="860" />
+  <p><sub><code>pjm visualize</code>, generated locally from <code>.projectmem/events.jsonl</code>.</sub></p>
+</div>
 
-Full security policy and threat model: [SECURITY.md](https://github.com/riponcm/projectmem/blob/main/SECURITY.md) · [Privacy & Security guide](https://projectmem.dev/guide#privacy-security)
+## How it works
 
-## Design Principles
+```text
+your agent (MCP tools) ─┐
+pjm CLI ────────────────┼──▶ .projectmem/events.jsonl ──▶ summary.md, PROJECT_MAP.md, issues/
+git hooks ──────────────┘    append-only log, local          distilled, small, committed
+                                                                      │
+   start_session(), precheck_file(file_path), edit hook, pre-commit ◀┘
+```
 
-- **Local-first** — No cloud, no telemetry, and no network calls unless you turn on the update check. Your data never leaves your machine.
-- **Project-scoped** — Memory lives in the repo. When the code moves, the memory moves.
-- **AI-tool-agnostic** — Works natively via MCP, or universally via Markdown instructions. Any AI tool, any workflow.
+1. **Capture.** The agent logs work through MCP tools (`log_issue`,
+   `record_attempt`, `record_fix`, `add_decision`, `add_note`), you can do the
+   same with `pjm log`, `pjm attempt` and friends, and the git hooks classify
+   commits and reverts. Secrets are redacted before anything touches disk.
+2. **Distill.** Every write rebuilds `summary.md` and the issue files from the
+   append-only `events.jsonl`. The agent reads the small files, never the raw log.
+3. **Use.** At session start the agent loads the summary. Before an edit or a
+   commit, projectmem checks the file's history and warns.
 
-## Built With
+Session-start cost, measured on 0.3.5 with the `cl100k_base` tokenizer on nine
+real projects of 9 to 238 events:
 
-`projectmem` stands on the shoulders of these excellent open-source projects:
+| Access mode | Tokens per session | How it works |
+|---|---|---|
+| No projectmem (baseline, estimate) | 5,000 – 20,000+ | The agent re-reads source files every session |
+| **MCP** *(recommended)* | **~3,700 – 7,600** at session start | `start_session()` once, then `get_issue(issue_id)` or `precheck_file(file_path)` only when relevant |
+| Markdown only | ~3,700 – 7,600 | The agent reads the three distilled files |
+| `pjm wrap` (estimate) | 500 – 2,000 | A pre-built context block within a budget you set |
 
-- [**Typer**](https://github.com/tiangolo/typer) — the CLI framework that makes `pjm` feel ergonomic
-- [**Model Context Protocol**](https://modelcontextprotocol.io) — Anthropic's open spec that lets AI agents talk to local tools
-- [**watchdog**](https://github.com/gorakhargosh/watchdog) — cross-platform filesystem event monitoring (the heart of `pjm watch`)
-- [**D3.js**](https://d3js.org) — the interactive visualizations in `pjm visualize`
+`AI_INSTRUCTIONS.md` is about 3,300 tokens in every project; the summary ranged
+from about 400 to 3,500 tokens and the project map from about 100 to 900.
 
-## Research & Citation
+## What's new in 0.3.7
 
-projectmem is described in a peer-readable research paper:
+- **One command connects your AI client.** `pjm init --agent claude-code` (or
+  `codex`, `cursor`, `antigravity`, `claude-desktop`) writes the MCP config for
+  you, plus the edit hook for Claude Code and Codex.
+- **`pjm import` from agentmemory and mem0.** Decisions, lessons and past
+  failures come over; raw activity stays behind.
+- **Private keys are redacted whole**, not just their first line. Contributed by
+  [@bardrop](https://github.com/bardrop)
+  ([#38](https://github.com/riponcm/projectmem/pull/38)).
+- **Backfill handles a `|` in a commit message**, so `pjm init` imports your git
+  history again. Reported by [@Fonsi44](https://github.com/Fonsi44)
+  ([#39](https://github.com/riponcm/projectmem/issues/39)).
+
+Earlier releases: 0.3.6 added the edit hook and `start_session()`, and 0.3.0 one
+MCP server for every project. Every release is in the
+[changelog](https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md).
+
+## How it compares
+
+| Capability | **projectmem** | claude-mem | agentmemory | mem0 | Letta |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Core focus | **Memory + judgment** | Session capture | Memory engine | Chat / user memory | Agent harness |
+| Warns before a commit from a file's own failure history | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Checks memory for staleness against git history | ✅ | ❌ | 🟡 links sessions to commits; time decay | ❌ | ❌ |
+| Failed attempts as typed events | ✅ worked / partial / failed | 🟡 bugfix type | 🟡 captures tool failures | ❌ | ❌ |
+| Keeps superseded memories (no deletion) | ✅ | ? | 🟡 versioned, but decay can evict | ✅ add-only since v3 | ✅ git-versioned memory |
+| Cross-project lessons | ✅ stack-scoped with a manifest | 🟡 opt-in flag | 🟡 cross-project search | 🟡 user-scoped | 🟡 per agent |
+| Runs locally with no LLM API key | ✅ | 🟡 local store, LLM compression | ✅ keyless mode | ❌ self-host needs a key | 🟡 local mode |
+| Native MCP server | ✅ 19 tools | ✅ | ✅ 54 tools | 🟡 hosted only | ❌ MCP client |
+| Price · licence | Free · MIT | Free · Apache-2.0, paid Pro | Free · Apache-2.0 | Free tier · Apache-2.0, paid cloud | Free tier · Apache-2.0, paid cloud |
+
+<sub>✅ yes · 🟡 partial · ❌ not found in the project's own docs · ? not documented. Snapshot taken 2026-10-02 from each project's README, docs and changelog; design capabilities, not benchmark results. Corrections welcome — [open an issue](https://github.com/riponcm/projectmem/issues).</sub>
+
+## FAQ
+
+### Does projectmem send my code or memory to the cloud?
+
+No. Everything stays in `.projectmem/` in your repository and in
+`~/.projectmem/` for cross-project lessons. There is no account and no telemetry,
+and the MCP server is a local process your client starts. The only network call
+projectmem can make is an update check you turn on with `pjm doctor --online`.
+
+### Which AI coding tools does it work with?
+
+Claude Code, Codex, Cursor, Antigravity and Claude Desktop are set up with
+`pjm init --agent`, and any other MCP client works with the config `pjm init`
+prints. The edit hook runs in Claude Code and Codex; other clients get the same
+lessons from the `precheck_file` tool.
+
+### How is it different from CLAUDE.md, AGENTS.md or Cursor rules?
+
+Those files hold instructions you write by hand. projectmem keeps a log of what
+actually happened in the project, distills it into a summary, and warns at edit
+and commit time from a file's own history. It also writes a short bridge into
+`CLAUDE.md` and `AGENTS.md` so agents know to use it, and
+`pjm export --claude-md` fills `CLAUDE.md` for agents without MCP.
+
+### How is it different from mem0, agentmemory or claude-mem?
+
+Those are general memory engines: they store conversations, observations or
+facts and retrieve them by similarity. projectmem stores only a coding project's
+issues, attempts, fixes, decisions and notes, and uses them to judge the next
+action, warning before a repeated failure. See [How it compares](#how-it-compares).
+
+### How many tokens does it add?
+
+About 3,700 to 7,600 tokens at session start, measured on nine real projects.
+Other tools, such as `precheck_file`, add only what the agent asks for. Without
+memory, an agent typically spends 5,000 to 20,000 tokens or more re-reading
+source files (an estimate). See [How it works](#how-it-works).
+
+### Can I bring my memory over from agentmemory or mem0?
+
+Yes, with `pjm import`. See [Import from another memory tool](#import-from-another-memory-tool).
+
+### Does my team share the memory?
+
+By default the distilled files (`summary.md`, `PROJECT_MAP.md`,
+`AI_INSTRUCTIONS.md`, `issues/`) are committed and the raw log is gitignored, so
+teammates' agents inherit the project's history. Add `.projectmem/` to
+`.gitignore` to keep it all private.
+
+## Import from another memory tool
+
+```bash
+pjm import agentmemory-export.json --from agentmemory   # or: --from mem0
+```
+
+Only what maps onto projectmem's own events comes over:
+
+| From | Becomes |
+|---|---|
+| agentmemory `architecture` memories, decision observations | decision |
+| agentmemory lessons, crystal summaries, other memories | note |
+| agentmemory error observations | failed attempt on its files, so precheck and the edit hook warn about it |
+| mem0 memories (untyped facts) | note |
+| raw activity (file reads and writes, commands, searches), superseded memories, other projects' records | dropped |
+
+The first run only shows what would be imported. Add `--apply` to write it.
+Records keep their original dates, secrets are redacted, and importing the same
+file twice adds nothing. For agentmemory, only records whose project is this repo
+(or a folder in it) are taken; `--source-project <old path>` picks a repo that
+moved.
+
+Get the export with `curl -s http://localhost:3111/agentmemory/export` while
+agentmemory runs, or with mem0's `get_all`.
+
+## Reference
+
+### Connect a client by hand
+
+`pjm init --agent <client>` does this for you. To do it by hand, use the absolute
+path of the Python that has projectmem installed, because clients start servers
+without your shell's `PATH`. `pjm init` prints the block with that path filled in.
+
+```json
+"mcpServers": {
+  "projectmem": {
+    "command": "/absolute/path/to/python",
+    "args": ["-m", "projectmem.mcp_server"]
+  }
+}
+```
+
+No `--root` and no `cwd`: that is what makes one server serve every project.
+Fully restart the client afterwards.
+
+<details>
+<summary><b>Claude Code</b></summary>
+
+```bash
+claude mcp add --scope user projectmem -- /absolute/path/to/python -m projectmem.mcp_server
+pjm hooks install --agent claude-code   # the edit hook
+```
+
+</details>
+
+<details>
+<summary><b>Claude Desktop</b></summary>
+
+Claude menu → **Settings…** → **Developer** → **Edit Config**, or the file itself:
+`~/Library/Application Support/Claude/claude_desktop_config.json` (macOS),
+`%APPDATA%\Claude\claude_desktop_config.json` (Windows),
+`~/.config/Claude/claude_desktop_config.json` (Linux). Paste the block above,
+then quit with Cmd+Q and reopen. Claude Desktop ignores the `cwd` field, which is
+why older releases needed `--root`.
+
+</details>
+
+<details>
+<summary><b>Cursor</b></summary>
+
+**Settings…** → **Tools & MCPs** → **Add Custom MCP**, or `~/.cursor/mcp.json`
+(global) and `<project>/.cursor/mcp.json` (that project only). Paste the block
+above wrapped in `{ }`, then quit with Cmd+Q and reopen. Cursor ignores `cwd`.
+
+</details>
+
+<details>
+<summary><b>Antigravity</b></summary>
+
+Agent panel → **⋯** → **MCP Servers** → **Manage MCP Servers**, or
+`~/.gemini/antigravity/mcp_config.json`. Paste the block above wrapped in `{ }`,
+then quit and reopen.
+
+</details>
+
+<details>
+<summary><b>Codex</b></summary>
+
+```bash
+codex mcp add projectmem -- /absolute/path/to/python -m projectmem.mcp_server
+pjm hooks install --agent codex   # the edit hook
+```
+
+Or add to `~/.codex/config.toml` (TOML, not JSON):
+
+```toml
+[mcp_servers.projectmem]
+command = "/absolute/path/to/python"
+args = ["-m", "projectmem.mcp_server"]
+```
+
+Set the reasoning effort to `medium` or higher: on `low`, Codex was seen skipping
+the session-start call.
+
+</details>
+
+<details>
+<summary><b>Pin a server to one repository</b></summary>
+
+Add `"--root", "/absolute/path/to/your/project"` to `args`. A pinned server
+serves only that repository and refuses to write anywhere else, even when asked.
+`pjm init --mcp-config-single` prints this form.
+
+</details>
+
+On first use, the client asks permission before each projectmem tool call. That
+is normal MCP behaviour; approve each tool once.
+
+### One server, many projects
+
+One MCP server serves every project you have run `pjm init` in. With one project
+there is nothing to choose. With several, the agent passes `project="<name>"`,
+or you set a default:
+
+```bash
+pjm project list          # what the server can reach
+pjm project use ossdrop   # the default when a call names no project
+```
+
+Every write names the project it landed in, so a call that reached the wrong
+repository is visible at once. A call resolves to the `--root` the server was
+pinned to, then the `project` argument, then the active project, then the
+folder it runs in; when none applies, it refuses and lists the registered
+projects instead of guessing.
+
+### MCP tools
+
+Every tool that reads or writes a project takes an optional `project` argument.
+
+**Read (14):**
+
+| Tool | When to use |
+|---|---|
+| `start_session()` | Start of every session: rules, summary and current plan in one call |
+| `get_instructions()` | The workflow rules on their own |
+| `get_summary()` | The distilled project memory |
+| `get_project_map()` | The repository's structure |
+| `get_plan()` | `plan.md`: ideas and plans, kept apart from the event log |
+| `precheck_file(file_path)` | Before editing a file: its failure history |
+| `precheck_files(file_paths)` | The same for several files in one call |
+| `get_issue(issue_id)` | One issue's full history |
+| `search_events(query)` | Text search across all events |
+| `get_context(tokens, focus)` | A memory block within a token budget, optionally focused |
+| `get_score()` | The A+ to F prevention score with estimated savings |
+| `get_global_gotchas(library)` | Library lessons carried over from other projects |
+| `list_projects()` | Every registered project, and which one is active |
+| `current_project()` | Where a call would go, without writing anything |
+
+**Write (5):**
+
+| Tool | When to use |
+|---|---|
+| `log_issue(summary, location)` | As soon as a bug shows up |
+| `record_attempt(summary, outcome, issue_id)` | After each fix attempt (`failed`, `partial` or `worked`); `issue_id` is required while several issues are open |
+| `record_fix(summary, issue_id)` | When a fix is confirmed |
+| `add_decision(summary, supersedes?)` | For a design choice; `supersedes` retires an older decision without losing it |
+| `add_note(summary)` | For a gotcha, a setup detail or a constraint |
+
+### CLI
+
+| Command | Purpose |
+|---|---|
+| `pjm init [--agent <client>]` | Create `.projectmem/`, install the git hooks, inherit global lessons; `--agent` also connects an AI client |
+| `pjm import <file> --from agentmemory\|mem0 [--apply]` | Bring decisions, lessons and past failures over from another memory tool |
+| `pjm log <text>` | Open an issue |
+| `pjm attempt <text> [--failed\|--worked]` | Record a fix attempt |
+| `pjm fix <text> [--issue <id>]` | Record the confirmed fix and close the issue |
+| `pjm decision <text> [--supersedes <id>]` | Record a decision, optionally retiring an older one |
+| `pjm note <text>` | Record a gotcha or durable context |
+| `pjm plan ["idea"]` | Print `plan.md`, or add an idea to it |
+| `pjm show` / `pjm brief` | The summary, or a one-screen session briefing |
+| `pjm search <query> [--failed-only]` | Search all events; `--failed-only` lists the dead ends |
+| `pjm precheck [--snooze 2h]` | Check files against their failure history (run by the pre-commit hook) |
+| `pjm export [--claude-md\|--cursor]` | Write memory into `CLAUDE.md` or `.cursorrules` for agents without MCP |
+| `pjm wrap <agent>` / `pjm context [--tokens N]` | A token-budgeted context block |
+| `pjm score [--format text\|json\|badge]` | The prevention score |
+| `pjm visualize` / `pjm dashboard` | The project dashboard, or one view across all projects |
+| `pjm map [--build]` | The project map, built from the code's structure |
+| `pjm doctor [--fix] [--online]` | Find unregistered projects, stale entries and pinned client configs |
+| `pjm project list\|use\|register\|scan\|alias\|remove` | Manage the projects the MCP server can reach |
+| `pjm hooks install\|uninstall [--agent claude-code\|codex]` | Git hooks, or the edit hook for an agent |
+| `pjm global <action>` | Manage cross-project lessons |
+| `pjm watch`, `pjm backfill`, `pjm regenerate`, `pjm stats` | File-churn watcher, import git history, rebuild the summary, token statistics |
+
+Add `--at "file.py:42"` to any logging command to attach a location. Run
+`pjm <command> --help` for every option.
+
+### `plan.md`: intent, kept apart from memory
+
+`pjm init` also creates `.projectmem/plan.md` for ideas and plans: what you *mean*
+to do. The event log records what *happened* and is never rewritten; the plan is
+edited in place, by you or the agent, and never becomes an event.
+`start_session()` includes the current plan, and `get_plan()` returns the whole
+file.
+
+## Privacy and security
+
+- **Local only.** No cloud service, no account, no telemetry.
+- **Secrets are redacted** before an event is written: API keys and tokens for
+  OpenAI, Anthropic, GitHub, AWS, Google, Slack and Stripe, JWTs, bearer tokens
+  and whole private keys. `PROJECTMEM_NO_REDACT=1` turns it off.
+- **You choose what is shared.** Distilled files are committed by default and the
+  raw log is gitignored; add `.projectmem/` to `.gitignore` to keep everything on
+  your machine.
+
+Full policy and threat model: [SECURITY.md](https://github.com/riponcm/projectmem/blob/main/SECURITY.md).
+
+## Research and citation
+
+projectmem is described in a research paper:
 
 > **PROJECTMEM: A Local-First, Event-Sourced Memory and Judgment Layer for AI Coding Agents**
 > Ripon Chandra Malo, Tong Qiu — University of Utah
 > [arXiv:2606.12329](https://arxiv.org/abs/2606.12329) · cs.AI
 
-The paper introduces the **Memory-as-Governance** framing — memory that doesn't merely answer the agent but acts on its next action — and reports the design, the deterministic pre-commit judgment gate, a capability comparison against 12 contemporary memory systems, and a two-month, 207-event dogfooding study across 10 real projects.
-
-If projectmem is useful in your research or writing, please cite:
+It introduces the **Memory-as-Governance** framing, memory that acts on the
+agent's next action instead of only answering it, and reports the design, the
+pre-commit judgment gate, a capability comparison against 12 memory systems, and
+a two-month, 207-event dogfooding study across 10 real projects.
 
 ```bibtex
 @misc{malo2026projectmem,
@@ -1026,28 +610,23 @@ If projectmem is useful in your research or writing, please cite:
 }
 ```
 
+## Contributing
+
+projectmem was started by one developer and is shaped by contributors from the
+open-source community.
+
+- **[Star the repo](https://github.com/riponcm/projectmem)**: one click, and it
+  helps others find it.
+- **[Open an issue](https://github.com/riponcm/projectmem/issues)**: bugs,
+  feature requests, an import source you need.
+- **[Send a pull request](https://github.com/riponcm/projectmem/pulls)**: for
+  anything large, open an issue first.
+- **Using it at work?** Tell us at [support@projectmem.dev](mailto:support@projectmem.dev).
+
+Built with [Typer](https://github.com/tiangolo/typer), the
+[Model Context Protocol](https://modelcontextprotocol.io),
+[watchdog](https://github.com/gorakhargosh/watchdog) and [D3.js](https://d3js.org).
+
 ## License
 
-MIT — free for personal, commercial, and enterprise use forever.
-
----
-
-## Help Us Reach More Developers
-
-**We don't need money. We need you.**
-
-`projectmem` was started by one developer and is now shaped by contributors from the open-source community. Every star, every share, and every contribution helps the project survive and grow.
-
-- **[Star the repo](https://github.com/riponcm/projectmem)** — takes one click, helps massively with discovery
-- **Share on X / LinkedIn** — tell other devs they don't have to keep paying AI to relearn their codebase
-- **[Open an issue](https://github.com/riponcm/projectmem/issues)** — bug, feature request, or just feedback
-- **[Contribute code](https://github.com/riponcm/projectmem/pulls)** — PRs welcome; for anything large, open an issue first
-- **Using `projectmem` at work or in a commercial product?** Reach out to [support@projectmem.dev](mailto:support@projectmem.dev) so we know who's shipping with us. It's free — we just love hearing about it.
-
-*Stars and shares matter more than money — but if you really want to:* [sponsor on GitHub](https://github.com/sponsors/riponcm) →
-
----
-
-<div align="center">
-  <sub>Built with care by the open-source community. Every contribution, no matter how small, makes a difference.</sub>
-</div>
+MIT: free for personal, commercial and enterprise use.
