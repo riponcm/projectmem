@@ -2,11 +2,13 @@
 
 ## 0.3.7
 
-**One command connects your AI client, private keys are redacted whole, and backfill no longer trips over a `|` in a commit message.**
+**One command connects your AI client, your history from agentmemory or mem0 comes with you, private keys are redacted whole, and backfill no longer trips over a `|` in a commit message.**
 
 ### Added
 
 - **`pjm init --agent <client>` connects an AI client for you.** Setting up the MCP server used to mean copying the block `pjm init` prints into the right file for each client. With `--agent claude-code`, `codex`, `cursor`, `antigravity` or `claude-desktop` (repeat it for several), `pjm init` adds the server to that client's user config once, for every project, and for Claude Code and Codex also installs the edit hook from 0.3.6. Claude Code and Codex are set up through their own `claude mcp add` and `codex mcp add`. For Cursor, Antigravity and Claude Desktop, only the `projectmem` entry is added to their JSON file: other servers and settings stay as they were, the previous file is kept as `<name>.pjm-bak`, and the file's permissions and dotfile symlinks are kept. A config that does not parse is left untouched and the entry to paste is printed. An entry pinned to one repo, or a projectmem server saved under another name, is left as it is. Running it again changes nothing. Without `--agent`, `pjm init` prints the config as before.
+
+- **`pjm import <file> --from agentmemory|mem0` brings your history from another memory tool.** Only what maps onto projectmem's own events comes over. From agentmemory: `architecture` memories and decision observations become decisions; lessons, crystal narratives and `bug`, `pattern`, `workflow`, `fact` and `preference` memories become notes; error observations become failed attempts on their files, so precheck and the edit hook show them. Raw activity such as file reads and writes, commands and searches is dropped, as are superseded memories and other projects' records: only records whose project is this repo, or a folder inside it, are taken (`--source-project` picks a repo that moved). From mem0, every memory becomes a note, since mem0 memories carry no type. The first run only shows what would be imported; `--apply` writes it through the usual write path, so secrets are redacted, and keeps each record's original date. Each imported event names its source record, so importing the same file again adds nothing, and text the project already has is skipped. The export comes from agentmemory's `GET /agentmemory/export` or mem0's `get_all`.
 
 ### Fixed
 

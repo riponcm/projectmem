@@ -338,6 +338,23 @@ def hooks(
         hooks_command.run(action=action)
 
 
+@app.command("import")
+def import_(
+    path: Path = typer.Argument(..., help="The export file to import."),
+    source: str = typer.Option(..., "--from", help="Where it comes from: agentmemory or mem0."),
+    apply: bool = typer.Option(False, "--apply", help="Write the events. Without it, only show what would be imported."),
+    source_project: str | None = typer.Option(
+        None, "--source-project",
+        help="agentmemory only: take the records of this project path instead of "
+             "this repo's own path (for a repo that moved).",
+    ),
+) -> None:
+    """Import decisions, lessons and past failures from another memory tool."""
+    from projectmem.commands import import_memory
+
+    import_memory.run(path, source, apply=apply, source_project=source_project)
+
+
 @app.command("_auto-capture", hidden=True)
 def auto_capture(
     trigger: str = typer.Argument("commit", help="Trigger type: commit, merge."),

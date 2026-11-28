@@ -5,7 +5,7 @@
 
   <p>
     <a href="https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md"><b>🎉 v0.3.7 is out</b></a> —
-    one command connects Claude Code, Codex, Cursor, Antigravity or Claude Desktop, and private keys are now redacted whole.
+    one command connects Claude Code, Codex, Cursor, Antigravity or Claude Desktop, your history from agentmemory or mem0 comes with you, and private keys are now redacted whole.
     <a href="https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md">See what changed →</a>
   </p>
 
@@ -186,7 +186,7 @@ cd your-project && pjm init
 |---|---|
 | **[Complete setup guide](https://projectmem.dev/blog/projectmem-complete-guide-ai-coding-agent-memory)** | The full walkthrough on the web — install, MCP setup per client, `pjm doctor`, your first logged issue, and both dashboards. Every terminal output is captured from a real run. |
 | **[TUTORIAL.md](https://github.com/riponcm/projectmem/blob/main/TUTORIAL.md)** | 15-minute step-by-step walkthrough — set up projectmem on your own project, watch the lifecycle, see the pre-commit warning fire. |
-| **[CHANGELOG.md](https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md)** | Release history. Latest: v0.3.7 — one command connects your AI client, private keys redacted whole, backfill fix. |
+| **[CHANGELOG.md](https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md)** | Release history. Latest: v0.3.7 — one command connects your AI client, `pjm import` from agentmemory and mem0, private keys redacted whole. |
 | **[Research paper (arXiv:2606.12329)](https://arxiv.org/abs/2606.12329)** | *PROJECTMEM: A Local-First, Event-Sourced Memory and Judgment Layer for AI Coding Agents* — the peer-readable version: design, Memory-as-Governance framing, capability comparison, and the 207-event dogfooding study. |
 | **[LICENSE](https://github.com/riponcm/projectmem/blob/main/LICENSE)** | MIT |
 
@@ -223,7 +223,7 @@ That's it. `pjm init` installs three git hooks (pre-commit warnings, post-commit
 
 ---
 
-## ✨ New in 0.3.7 — one command connects your AI client
+## ✨ New in 0.3.7 — one command connects your AI client, and your history comes with you
 
 **No more pasting config.** Connecting a client to projectmem used to mean
 finding its config file and pasting a block into it. Now one command does it:
@@ -240,6 +240,21 @@ Claude Code and Codex are set up through their own `claude mcp add` and
 were, and the previous file is kept as a backup. A config it cannot read is
 left untouched, and running it twice changes nothing. Your AI can run it for
 you, too: see [Start here](#-start-here--five-minutes-once).
+
+**Switching from agentmemory or mem0? Bring your history.** Export it, then:
+
+```bash
+pjm import agentmemory-export.json --from agentmemory   # or: --from mem0
+```
+
+Only the useful part comes over: decisions, lessons and past failures,
+mapped onto projectmem's own issues, attempts, decisions and notes. Raw
+activity such as file reads, writes and commands is dropped, and so are other
+projects' records. The first run only shows what would be imported; add
+`--apply` to write it. Past failures land on their files, so precheck and the
+edit hook warn before your agent repeats them. Importing twice adds nothing.
+Get the export with `curl -s http://localhost:3111/agentmemory/export` while
+agentmemory runs, or with mem0's `get_all`.
 
 **Private keys are redacted whole.** Only the `BEGIN … PRIVATE KEY` line used
 to be replaced, so the key itself reached `events.jsonl`. Now the whole block
@@ -561,7 +576,7 @@ Your project's memory is also something you can *watch* — and share.
 
 ## 🚧 Upcoming
 
-- **Import your existing memory** — `pjm import` *(planned for 0.4.0)* will migrate history from **mem0**, **agentmemory**, **Letta**, and Claude session logs into projectmem. It maps only to the core event vocabulary — issues, attempts, fixes, decisions, notes — so signal comes in and another tool's clutter stays out. Your judgment history moves with you.
+- **More import sources** — `pjm import` brings history over from **agentmemory** and **mem0** since 0.3.7. **Letta** and Claude session logs are next, with the same rule: only what maps onto issues, attempts, fixes, decisions and notes comes in, so signal comes in and another tool's clutter stays out.
 
 Want a source supported? [Open an issue](https://github.com/riponcm/projectmem/issues) and tell us what you're migrating from.
 
@@ -879,6 +894,7 @@ All 19 tools your AI can call. Every repo tool takes an optional
 | Command | Purpose |
 |---|---|
 | `pjm init` | Initialize memory + auto-install hooks + inherit global memory |
+| `pjm import <file> --from agentmemory\|mem0 [--apply]` | Bring decisions, lessons and past failures over from another memory tool; without `--apply` it only shows what would be imported *(new in 0.3.7)* |
 | `pjm init --agent <client>` | Also connect an AI client: `claude-code`, `codex`, `cursor`, `antigravity` or `claude-desktop` (repeatable). Adds the MCP server once for every project and, for Claude Code and Codex, the edit hook *(new in 0.3.7)* |
 | `pjm log <text>` | Start a new issue / debugging session |
 | `pjm attempt <text> [--failed\|--worked]` | Record a fix attempt outcome |

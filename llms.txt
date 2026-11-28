@@ -69,6 +69,7 @@ Codex. Without `--agent`, `pjm init` prints the config to paste by hand.
 ## Key commands
 
 - `pjm init` — initialise memory in the current repository
+- `pjm import <file> --from agentmemory|mem0` — bring decisions, lessons and past failures from another memory tool (`--apply` to write)
 - `pjm init --agent <client>` — also connect an AI client (MCP server, plus the edit hook for Claude Code and Codex)
 - `pjm brief` — session-start briefing: warnings, stale memories, open issues, score
 - `pjm show` — print the distilled summary
