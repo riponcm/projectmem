@@ -9,6 +9,8 @@ from projectmem.models import Event, normalize_timestamp
 from projectmem.storage import append_event, read_events
 from projectmem.summary import regenerate_summary
 
+FIELD_SEP = "\x1f"  # what git prints for %x1f in the log format below
+
 
 def run(limit: int = 20, root: Path | None = None) -> None:
     root_path = root or Path.cwd()
@@ -16,7 +18,9 @@ def run(limit: int = 20, root: Path | None = None) -> None:
     # 1. Get git log
     try:
         result = subprocess.run(
-            ["git", "log", f"-n {limit}", "--pretty=format:%h|%s|%an|%ai"],
+            # Fields are separated by the unit separator (0x1f), which cannot
+            # appear in a commit subject or author name the way "|" can.
+            ["git", "log", f"-n {limit}", "--pretty=format:%h%x1f%s%x1f%an%x1f%ai"],
             cwd=root_path,
             check=True,
             capture_output=True,
@@ -37,8 +41,8 @@ def run(limit: int = 20, root: Path | None = None) -> None:
     
     new_count = 0
     for line in reversed(lines): # Start from oldest
-        parts = line.split("|")
-        if len(parts) < 4:
+        parts = line.split(FIELD_SEP)
+        if len(parts) != 4:
             continue
             
         commit_hash, message, author, date = parts
