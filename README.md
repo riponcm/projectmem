@@ -247,10 +247,39 @@ the pause itself is logged.
   the project solved and what failed on the way, and `pjm dashboard` gives one
   view across all your projects without copying their data anywhere.
 
-<div align="center">
-  <img src="https://raw.githubusercontent.com/projectmem/projectmemdoc/main/screenshots/dashboard-overview-0.3.0.png" alt="projectmem dashboard: memory card, failure heatmap, ROI and case files for one project" width="860" />
-  <p><sub><code>pjm visualize</code>, generated locally from <code>.projectmem/events.jsonl</code>.</sub></p>
-</div>
+## See your project's memory
+
+`pjm visualize` opens a local dashboard for one project, and `pjm dashboard`
+opens one view across all of them. Both are built from the files in
+`.projectmem/` on your machine; nothing is uploaded.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/projectmem/projectmemdoc/main/screenshots/dashboard-overview-0.3.0.png" alt="projectmem dashboard overview: memory card, failure heatmap, estimated savings and case files for one project" width="860" />
+  <br /><sub><b>Overview</b>: every case the project solved, what failed on the way, and what it saved.</sub>
+</p>
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/brand/dashboard-global.png" alt="projectmem global dashboard: every registered project in one view with grades, issues and savings" width="420" />
+      <br /><sub><b>Global dashboard</b> (<code>pjm dashboard</code>): all your projects in one view, aggregated at read time.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/brand/dashboard-projectmap-flow.png" alt="Project Map Flow view: project, folders and files flowing into the memory log, with failing files highlighted in red" width="420" />
+      <br /><sub><b>Project Map · Flow</b>: what happened, file by file, flowing into memory. Files that keep failing glow red.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/brand/dashboard-timeline-spine.png" alt="Timeline Time Spine view: problems branch left, fixes and decisions branch right along a real time axis" width="420" />
+      <br /><sub><b>Timeline · Time Spine</b>: problems on the left, knowledge on the right, real time down the middle.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="https://raw.githubusercontent.com/riponcm/projectmem/main/brand/dashboard-showoff-universe.png" alt="Showoff Universe view: the project's memory as a rotating galaxy where every star is a real event" width="420" />
+      <br /><sub><b>Showoff · Universe</b>: your project as a galaxy; every star is a real issue, attempt, fix or decision. Record it as a clip to share.</sub>
+    </td>
+  </tr>
+</table>
 
 ## How it works
 
