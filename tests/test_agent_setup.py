@@ -169,10 +169,13 @@ def test_writes_through_a_dotfiles_symlink(home: Path, tmp_path: Path) -> None:
     _cursor(home).parent.mkdir(parents=True)
     _cursor(home).symlink_to(real)
 
-    agent_setup.setup("cursor")
+    outcome = agent_setup.setup("cursor")
 
     assert _cursor(home).is_symlink()
     assert "projectmem" in json.loads(real.read_text())["mcpServers"]
+    # The backup sits next to the real file, and the message says where.
+    assert real.with_name("mcp.json.pjm-bak").exists()
+    assert any(str(real.with_name("mcp.json.pjm-bak")) in line for line in outcome.lines)
 
 
 def test_claude_desktop_path_per_platform(home: Path, monkeypatch: pytest.MonkeyPatch) -> None:

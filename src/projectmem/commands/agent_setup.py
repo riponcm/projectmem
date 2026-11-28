@@ -222,7 +222,7 @@ def setup_json_client(client: str) -> Outcome:
     backup = write_json_config(path, data)
     lines = [f"MCP server {'updated' if state == 'update' else 'added'} in {show(shown)}"]
     if backup:
-        lines.append(f"  Previous file kept as {backup.name}; other servers untouched.")
+        lines.append(f"  Previous file kept as {show(backup)}; other servers untouched.")
     return Outcome(lines=lines, changed=True)
 
 
