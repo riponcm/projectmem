@@ -384,7 +384,9 @@ def run(
         for client, path in pinned:
             typer.echo(f"      {client}  {path}")
         typer.echo('      Remove --root / cwd / PROJECTMEM_ROOT from the projectmem entry.')
-        typer.echo("      projectmem never edits client settings — that one is yours to change.")
+        # `pjm init --agent` writes client configs but leaves a pinned entry
+        # alone on purpose (the pin may be deliberate), so this stays manual.
+        typer.echo("      A pin may be deliberate, so pjm init --agent leaves it alone; that one is yours to change.")
         # The advice above silently fails if the client is open: these files
         # hold the app's own preferences too, so it can rewrite the whole file
         # from memory on exit and restore the pin you just removed.
