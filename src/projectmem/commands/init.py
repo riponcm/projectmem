@@ -28,7 +28,12 @@ def run(
     no_structure: bool = False,
     global_tags: str | None = None,
     root: Path | None = None,
+    agents: list[str] | None = None,
 ) -> None:
+    from projectmem.commands import agent_setup
+
+    # Check the agent names first, so a typo stops before anything is written.
+    agent_keys = agent_setup.resolve(agents) if agents else []
     path = initialize(root)
     typer.echo(f"Initialized {path}")
 
@@ -112,7 +117,20 @@ def run(
 
     # Print a copy-pasteable MCP client config block — removes the
     # "how do I wire this up?" friction that hits every new user.
-    if not no_mcp_config:
+    if agent_keys:
+        # --agent writes the config itself, so the paste-this block is not needed.
+        typer.echo("")
+        typer.echo("  Connecting your AI client (once; it serves every project):")
+        setup_ok = agent_setup.run(agent_keys)
+        typer.echo(f"\n  This project is registered as '{root_path.name}'.")
+        typer.echo(
+            "  The projectmem tools appear in the next session; the one that ran "
+            "this command does not see them yet."
+        )
+        if not setup_ok:
+            typer.echo("\n  Some steps above need your attention.", err=True)
+            raise typer.Exit(1)
+    elif not no_mcp_config:
         _print_mcp_config(root_path, single_project=mcp_config_single)
 
     typer.echo(

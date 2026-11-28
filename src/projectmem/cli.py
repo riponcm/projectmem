@@ -61,6 +61,13 @@ def init(
     mcp_config_single: bool = typer.Option(False, "--mcp-config-single", help="Print the pinned single-project MCP config instead of the shared one."),
     no_structure: bool = typer.Option(False, "--no-structure", help="Skip building the code-structure cache (.projectmem/structure.json)."),
     global_tags: str | None = typer.Option(None, "--global-tags", help="Only inherit matching tags (comma-separated)."),
+    agent: list[str] = typer.Option(
+        [], "--agent",
+        help="Connect an AI client: claude-code, codex, cursor, antigravity or "
+             "claude-desktop. Adds the MCP server to its user config (once, for "
+             "every project) and, for Claude Code and Codex, the edit hook. "
+             "Repeat for several clients.",
+    ),
 ) -> None:
     """Create .projectmem/ in the current repo."""
     init_command.run(
@@ -69,6 +76,7 @@ def init(
         no_stack_detect=no_stack_detect, no_mcp_config=no_mcp_config,
         mcp_config_single=mcp_config_single,
         no_structure=no_structure, global_tags=global_tags,
+        agents=agent,
     )
 
 
