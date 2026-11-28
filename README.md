@@ -14,6 +14,7 @@
     <a href="https://github.com/riponcm/projectmem/stargazers"><img src="https://img.shields.io/github/stars/riponcm/projectmem?style=flat&color=f59e0b&label=stars" alt="GitHub stars"></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-3b82f6.svg" alt="License: MIT"></a>
     <a href="https://arxiv.org/abs/2606.12329"><img src="https://img.shields.io/badge/arXiv-2606.12329-b31b1b.svg" alt="arXiv paper"></a>
+    <a href="https://discord.com/invite/sPc55HFsJ5"><img src="https://img.shields.io/badge/Discord-Join%20us-5865F2?logo=discord&logoColor=white" alt="Join the projectmem Discord"></a>
   </p>
 
   <p>
@@ -25,7 +26,8 @@
     <a href="https://projectmem.dev/guide"><b>Guide</b></a> •
     <a href="https://projectmem.dev/demo"><b>Demo</b></a> •
     <a href="https://github.com/riponcm/projectmem/blob/main/CHANGELOG.md"><b>Changelog</b></a> •
-    <a href="https://arxiv.org/abs/2606.12329"><b>Paper</b></a>
+    <a href="https://arxiv.org/abs/2606.12329"><b>Paper</b></a> •
+    <a href="https://discord.com/invite/sPc55HFsJ5"><b>Discord</b></a>
   </p>
 
   <p>
@@ -665,6 +667,8 @@ are in it:
 [bardrop](https://github.com/bardrop) and
 [Fonsi](https://github.com/Fonsi44).
 
+- **[Join the Discord](https://discord.com/invite/sPc55HFsJ5)**: ask questions, share how you use projectmem,
+  and hear about releases first.
 - **[Star the repo](https://github.com/riponcm/projectmem)**: one click, and it
   helps others find it.
 - **[Open an issue](https://github.com/riponcm/projectmem/issues)**: bugs,
